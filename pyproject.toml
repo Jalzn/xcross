@@ -1,0 +1,45 @@
+[project]
+name = "xcross"
+version = "0.1.0"
+description = "xCross: an evolving, calibrated expected-cross model that scores the quality of crosses from football tracking data."
+readme = "README.md"
+requires-python = ">=3.13"
+license = { text = "MIT" }
+authors = [{ name = "Jalmir Ferreira", email = "jalmirfsjr@gmail.com" }]
+keywords = ["football", "soccer", "tracking-data", "expected-cross", "sports-analytics", "machine-learning"]
+classifiers = [
+    "Programming Language :: Python :: 3.13",
+    "License :: OSI Approved :: MIT License",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "polars>=1.0",
+    "loguru>=0.7",
+    "tqdm>=4.66",
+    "joblib>=1.4",
+    "numpy>=2.4.6",
+    "scikit-learn>=1.8.0",
+    "xgboost>=3.2.0",
+    "matplotlib>=3.10.9",
+    "catboost>=1.2.10",
+]
+
+[project.urls]
+Repository = "https://github.com/Jalzn/xcross"
+Issues = "https://github.com/Jalzn/xcross/issues"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.9",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]

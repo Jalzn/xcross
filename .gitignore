@@ -1,0 +1,28 @@
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+.venv
+
+# PFF tracking is licensed, do not redistribute (see README).
+# Leading slash anchors to repo root so it never matches the xcross/data/ package.
+/data/
+
+tmp/
+
+# The committed report + models keep the repo usable without the licensed data;
+# ignore the rest, including report.py's generated README copy.
+/artifacts/*
+!/artifacts/reports/
+!/artifacts/models/
+/artifacts/reports/README.md
+
+catboost_info/
+.pytest_cache/
+
+.DS_Store
+
+CLAUDE.md

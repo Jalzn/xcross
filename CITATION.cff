@@ -1,0 +1,19 @@
+cff-version: 1.2.0
+title: "xCross: a calibrated expected-cross model from football tracking data"
+message: "If you use this software or model, please cite it as below, and cite the method version you used — each version is a PDF under papers/ (current: papers/xcross-v2.pdf)."
+abstract: "xCross is a continuously developed, calibrated expected-cross model for football tracking data. The method evolves in the open and each version is released as a PDF under papers/ in the repository."
+type: software
+authors:
+  - given-names: Jalmir
+    family-names: Ferreira
+    email: jalmirfsjr@gmail.com
+repository-code: "https://github.com/Jalzn/xcross"
+license: MIT
+version: 0.1.0
+date-released: 2025-08-04
+keywords:
+  - football
+  - soccer
+  - tracking-data
+  - expected-cross
+  - sports-analytics
