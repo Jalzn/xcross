@@ -10,9 +10,8 @@ it outputs a **calibrated probability** that, aggregated per player, lets you ra
 delivers the best crosses.
 
 This repository is the **continuous development of the xCross method** — not a one-off
-release. Each iteration is captured as a versioned paper in [`papers/`](papers/), while the
-code, results and docs here always track the latest version. See [Evolution](#evolution)
-for what changed across versions.
+release. The code, results and docs here always track the latest state of the model. See
+[Evolution](#evolution) for how it developed.
 
 ## Quickstart
 
@@ -64,6 +63,16 @@ owns the space*. The feature modules in [`xcross/features/`](xcross/features) tu
 into the scalar inputs the models consume (see [`docs/metrics.md`](docs/metrics.md) for the
 full feature list).
 
+Beyond the two maps, the model reads the **configuration around the cross**: pressure on the
+crosser, marking tightness and the largest free pocket in the box, the attack-vs-defense
+**coverage mismatch** (KL divergence between the two teams' distributions), goalkeeper geometry
+and the defensive block's shape. **xCrossOT** additionally reads the **ball's 3D flight** from its
+`z` trajectory — apex, launch/descent angle, hang time, loft, 3D pace — whether the ball clears
+the defenders and the keeper, the cross's swing/cutback, second-ball support around the landing,
+and how the box and arrival zone change over the flight. How this feature set was built and
+ablated, with the before/after numbers, is logged in
+[`docs/model-evolution.md`](docs/model-evolution.md).
+
 **Which features carry the signal?** The final models' importances confirm both maps matter,
 and show *where* each acts:
 
@@ -71,11 +80,13 @@ and show *where* each acts:
 |---|---|
 | ![Feature importance, xCross](docs/figures/chart_importance_xcross_success.png) | ![Feature importance, xCrossOT](docs/figures/chart_importance_xcrossot_success.png) |
 
-For **xCross**, attacking-shape entropy at the far post leads (`entropy_attack_in_second_post`,
-`entropy_general_in_second_post`), then pitch control in the central box. For **xCrossOT** the
-ball's arrival location dominates (`end_y`, `distance_from_end_line`), with arrival-zone entropy
-(`entropy_attack_in_zone`) right behind — the same place the [entropy ablation](#evolution) shows
-the gain concentrates.
+For **xCross**, **pressure on the crosser** (`pressure_crosser_nearest_def`) is the single strongest
+feature, ahead of far-post attacking-shape entropy (`entropy_attack_in_second_post`) and central-box
+pitch control, with goalkeeper geometry (`gk_ball_distance`) and the defensive block
+(`shape_last_line_to_gk_gap`) contributing. For **xCrossOT** the arrival-zone entropy
+(`entropy_attack_in_zone`) leads, with **whether the ball clears the keeper** (`clearance_over_keeper`)
+right behind and the cross's **3D pace** (`flight_pace_3d`) in the top five — the ball's `z`, previously
+unused, is now front-line signal alongside the arrival location (`distance_from_end_line`, `end_y`).
 
 ## Results
 
@@ -91,16 +102,16 @@ Everything below is measured on **≈7,500 crosses from 776 matches** across thr
 
 | Model | Target | AUC | ECE | Stability | ICC |
 |---|---|---|---|---|---|
-| xCross | `success` | 0.57 | 0.009 | **0.76** | 0.13 |
-| xCross | `shot` | 0.57 | 0.007 | 0.68 | 0.12 |
-| xCrossOT | `success` | **0.78** | 0.009 | 0.30 | 0.03 |
-| xCrossOT | `shot` | 0.71 | 0.009 | 0.43 | 0.04 |
+| xCross | `success` | 0.57 | 0.010 | **0.78** | 0.14 |
+| xCross | `shot` | 0.57 | 0.009 | 0.66 | 0.12 |
+| xCrossOT | `success` | **0.81** | 0.006 | 0.28 | 0.03 |
+| xCrossOT | `shot` | 0.73 | 0.009 | 0.36 | 0.03 |
 
-xCrossOT discriminates best (AUC up to 0.78) while xCross gives the more reproducible ranking
-(stability 0.76 vs 0.30) — the core trade-off charted below.
+xCrossOT discriminates best (AUC up to 0.81) while xCross gives the more reproducible ranking
+(stability 0.78 vs 0.28) — the core trade-off charted below.
 
 **Are the probabilities calibrated?** Both models track the diagonal across the range and ECE
-stays under 0.01 — the calibration that broke down above ~0.7 in v1 (see [Evolution](#evolution)):
+stays under 0.01:
 
 | xCross | xCrossOT |
 |---|---|
@@ -109,8 +120,8 @@ stays under 0.01 — the calibration that broke down above ~0.7 in v1 (see [Evol
 **And do they order crosses?** The complementary view — the actual success rate per
 predicted-probability decile. The black line (mean predicted) hugging the bars re-confirms the
 calibration above; the bars climbing left-to-right show the *ordering*. The gap between the two
-models is the discrimination difference made visual: xCross lifts the success rate from ~24% to
-~42% across deciles, xCrossOT from ~2% to ~70% (AUC 0.57 vs 0.78):
+models is the discrimination difference made visual: xCross lifts the success rate from ~23% to
+~42% across deciles, xCrossOT from ~1% to ~74% (AUC 0.57 vs 0.81):
 
 | xCross | xCrossOT |
 |---|---|
@@ -123,8 +134,8 @@ under the stricter chronological split:
 | Ranking by | Stability (random halves) | Stability (temporal) | ICC |
 |---|---|---|---|
 | Raw success rate | 0.06 | 0.07 | 0.01 |
-| **xCross** | **0.76** | **0.70** | **0.13** |
-| xCrossOT | 0.30 | 0.21 | 0.03 |
+| **xCross** | **0.78** | **0.71** | **0.14** |
+| xCrossOT | 0.28 | 0.17 | 0.03 |
 
 **Player ranking by xCross (creation quality), with 95% CI** — left, crosses that end in a
 successful shot (`success`); right, crosses that end in any shot (`shot`):
@@ -160,27 +171,18 @@ crossers, though they account for ~50% of all crosses:
 
 ## Evolution
 
-xCross is developed in the open, one version at a time. Each milestone is a versioned PDF in
-[`papers/`](papers/); the full version-to-version comparison, with every number, lives in
-[`docs/paper-comparison.md`](docs/paper-comparison.md).
+xCross is developed in the open. Its **development as one continuous flow — from its origin to today,
+each milestone and its measured effect on the results** — is tracked in
+[`docs/model-evolution.md`](docs/model-evolution.md).
 
-**v1** — [`papers/xcross-v1.pdf`](papers/xcross-v1.pdf). The original method: the spatial
-representation, the entropy and pitch-control features, xCrossOT > xCross, and the player archetypes.
+The **first paper we wrote for this model** is [`papers/xcross-v1.pdf`](papers/xcross-v1.pdf). The
+model has moved on substantially since then — leakage-free out-of-fold validation, robust calibration,
+three leagues, and the expanded feature set above — all captured in the evolution log.
 
-**v2 (current)** — [`papers/xcross-v2.pdf`](papers/xcross-v2.pdf). Keeps v1's structure but fixes the
-validation — **out-of-fold prediction grouped by match (no leakage)** and nested calibration — and adds
-the reproducibility evidence v1 never reported. Headlines:
-
-- **The model beats the raw stat.** Ranking players by their raw cross-success rate is *noise*
-  (split-half stability 0.06); xCross recovers a **stable** ranking (0.76) that also **predicts future
-  success ~3× better** than a player's own past success rate does.
-- **Entropy helps but is not dominant.** Removing the entire entropy block (~half the features) costs
-  only ~0.01–0.015 AUC; the gain concentrates in xCrossOT (arrival-zone entropy) — confirming v1's
-  direction while tempering the weight it placed on entropy.
-- **xCrossOT AUC rose** 0.74 → 0.78; **xCross fell** 0.62 → 0.57 (the match leakage the new validation
-  removes). Calibration, which broke down above ~0.7 in v1, now holds across the range (ECE < 0.01).
-- **Stated limits:** only 13% of crossers have the volume to be ranked (though 50% of all crosses), and
-  the ranking is reproducible but its gradient is shallow.
+Two pieces of evidence underpin the current results: the player ranking is **reproducible** (ranking by
+the raw success rate is noise at stability 0.06, while xCross recovers a stable 0.78), and the
+**entropy features help but are not dominant** (removing them costs only ~0.01–0.015 AUC, the gain
+concentrated in xCrossOT):
 
 | Ranking reproducibility — raw rate vs. the models | Entropy ablation — with vs. without |
 |---|---|
@@ -289,9 +291,9 @@ xcross/
 docs/
   data.md            # data layout and how to obtain the PFF dataset
   metrics.md         # guide to every metric and figure the report produces
-  paper-comparison.md # evolution log: what changed between versions
+  model-evolution.md # results log: the model's development and each milestone's measured effect
   figures/           # curated result figures used in this README
-papers/              # the paper PDFs, one per version (xcross-v1.pdf, xcross-v2.pdf)
+papers/              # the first paper written for this model (xcross-v1.pdf)
 artifacts/reports/   # committed final results: figures (PNGs) and metrics (CSVs)
 artifacts/models/    # committed serialized models (joblib) + metadata.json
 tests/               # pytest suite
@@ -312,8 +314,8 @@ uv run pytest -q
 
 ## Citation
 
-If you use this model or code, please cite it (see [`CITATION.cff`](CITATION.cff)) and the
-version you used — the PDFs in [`papers/`](papers/):
+If you use this model or code, please cite it (see [`CITATION.cff`](CITATION.cff)) and the method
+paper, [`papers/xcross-v1.pdf`](papers/xcross-v1.pdf):
 
 > Ferreira, J. *xCross: a calibrated expected-cross model from football tracking data.*
 > https://github.com/Jalzn/xcross

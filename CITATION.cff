@@ -1,7 +1,7 @@
 cff-version: 1.2.0
 title: "xCross: a calibrated expected-cross model from football tracking data"
-message: "If you use this software or model, please cite it as below, and cite the method version you used — each version is a PDF under papers/ (current: papers/xcross-v2.pdf)."
-abstract: "xCross is a continuously developed, calibrated expected-cross model for football tracking data. The method evolves in the open and each version is released as a PDF under papers/ in the repository."
+message: "If you use this software or model, please cite it as below, along with the method paper under papers/ (papers/xcross-v1.pdf)."
+abstract: "xCross is a continuously developed, calibrated expected-cross model for football tracking data. The method evolves in the open; the first paper is papers/xcross-v1.pdf and the code, results and docs in the repository track the latest state."
 type: software
 authors:
   - given-names: Jalmir
