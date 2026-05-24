@@ -53,3 +53,17 @@ AROUND_RADIUS_M = 10.0          # circle around the ball
 CENTER_BOX_HALF_WIDTH_M = 9.16  # goal-area half width (central strip of the box)
 ZONE_DEPTH_M = 25.0             # tactical zone: depth from the goal line (incl. box edge)
 NEAR_ACTION_LINE_M = 5.0        # perpendicular distance to the origin->destination line
+
+# --- New feature blocks: start-frame (xCross) ---
+GOAL_HALF_WIDTH_M = 3.66        # half of the 7.32 m goal mouth, for goal-angle features
+PRESSURE_RADIUS_M = 3.0         # pressure: a defender within this of the crosser presses him
+FREE_MARK_RADIUS_M = 2.5        # marking: a box attacker with no defender within this is "free"
+
+# --- New feature blocks: ball flight / OT (xCrossOT, the ball z trajectory) ---
+FLIGHT_GROUND_M = 1.0           # flight: below this the ball is "on the ground" (hang-time / bounce)
+ARRIVAL_HEAD_MAX_M = 2.2        # arrival: ball above this in the box went over everyone's head
+DEFENDER_REACH_M = 2.2          # clearance: outfield standing/jumping reach
+GK_REACH_M = 2.6                # clearance: keeper jumping reach
+CLEARANCE_NEAR_M = 2.0          # clearance: ball counts as "over" a player within this horizontally
+RING_INNER_M = 6.0             # support: inner radius of the second-ball ring around the drop zone
+RING_OUTER_M = 14.0           # support: outer radius of that ring

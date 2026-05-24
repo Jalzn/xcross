@@ -18,13 +18,25 @@ from tqdm.auto import tqdm
 
 import xcross.config
 import xcross.features.assemble
+import xcross.features.clearance
 import xcross.features.counts
+import xcross.features.coverage
 import xcross.features.entropy
 import xcross.features.events
+import xcross.features.flight
 import xcross.features.frames
+import xcross.features.geometry
+import xcross.features.goalkeeper
 import xcross.features.grid
+import xcross.features.marking
 import xcross.features.pitch_control
+import xcross.features.pockets
+import xcross.features.pressure
+import xcross.features.shape
 import xcross.features.spatial
+import xcross.features.support
+import xcross.features.swing
+import xcross.features.temporal
 from xcross.config import FEATURES_ROOT, PITCH_HALF_LENGTH_M, PITCH_HALF_WIDTH_M, PROCESSED_ROOT
 from xcross.features.assemble import cross_features
 
@@ -32,12 +44,24 @@ VERSION_FILE = "_features_version"
 _FEATURE_MODULES = (
     xcross.config,
     xcross.features.grid,
+    xcross.features.geometry,
     xcross.features.entropy,
     xcross.features.pitch_control,
     xcross.features.frames,
     xcross.features.spatial,
     xcross.features.events,
     xcross.features.counts,
+    xcross.features.pressure,
+    xcross.features.marking,
+    xcross.features.pockets,
+    xcross.features.coverage,
+    xcross.features.goalkeeper,
+    xcross.features.shape,
+    xcross.features.flight,
+    xcross.features.clearance,
+    xcross.features.swing,
+    xcross.features.support,
+    xcross.features.temporal,
     xcross.features.assemble,
 )
 
@@ -71,6 +95,16 @@ def list_processed(only: set[str] | None) -> list[Path]:
     return out
 
 
+def _goalkeeper_ids(match_dir: Path) -> dict[int, set[int]]:
+    """team_id -> {goalkeeper player_id(s)} from the roster (a team may have subbed keepers)."""
+    roster_path = match_dir / "roster.parquet"
+    if not roster_path.exists():
+        return {}
+    keepers = pl.read_parquet(roster_path).filter(pl.col("position_group") == "GK")
+    grouped = keepers.group_by("team_id").agg(pl.col("player_id"))
+    return {tid: set(pids) for tid, pids in zip(grouped["team_id"], grouped["player_id"], strict=True)}
+
+
 def _process_one(match_dir_str: str) -> dict:
     match_dir = Path(match_dir_str)
     try:
@@ -89,11 +123,12 @@ def _process_one(match_dir_str: str) -> dict:
         fps = meta["fps"]
         tracking = pl.read_parquet(match_dir / "tracking.parquet").partition_by("cross_id", as_dict=True)
         ball = pl.read_parquet(match_dir / "ball.parquet").partition_by("cross_id", as_dict=True)
+        gk_ids = _goalkeeper_ids(match_dir)
 
         rows = [
             cross_features(
                 row, tracking[(row["cross_id"],)], ball[(row["cross_id"],)],
-                meta["league"], meta["season"], half_length, half_width, fps,
+                meta["league"], meta["season"], half_length, half_width, fps, gk_ids,
             )
             for row in crosses.iter_rows(named=True)
         ]

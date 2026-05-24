@@ -26,6 +26,18 @@ OT_ONLY = [
 FEATURE_SETS = ("xcross", "xcrossot")
 ENTROPY_PREFIX = "entropy_"  # the spatial-entropy block; dropped by the "_noent" ablation sets
 
+# Feature blocks added on top of the original feature set, each tagged by a column prefix.
+# The block ablation (see _feature_columns) drops a block by removing every column with its
+# prefix. NEW_OT_BLOCKS are destination-dependent, so they are excluded from `xcross` too.
+NEW_BLOCK_PREFIXES = {
+    "pressure": "pressure_", "marking": "marking_",
+    "pocket": "pocket_", "coverage": "coverage_", "gk": "gk_", "shape": "shape_",
+    "support": "support_", "flight": "flight_",
+    "clearance": "clearance_", "swing": "swing_", "temporal": "temporal_",
+}
+NEW_OT_BLOCKS = {"support", "flight", "clearance", "swing", "temporal"}
+BLOCK_SEP = "__"  # separates the base set from block-drop suffixes (avoids clashing with "_noent")
+
 
 def load_features() -> pl.DataFrame:
     """Concatenate every non-empty per-match features parquet."""
@@ -34,17 +46,39 @@ def load_features() -> pl.DataFrame:
     return pl.concat([f for f in frames if f.width > 0])
 
 
+def _blocks_to_drop(suffixes: list[str]) -> set[str]:
+    """`__base` drops every new block (= the previous version); `__drop-<block>` drops one."""
+    drop: set[str] = set()
+    for suffix in suffixes:
+        if suffix == "base":
+            drop |= set(NEW_BLOCK_PREFIXES)
+        elif suffix.startswith("drop-"):
+            drop.add(suffix.removeprefix("drop-"))
+    return drop
+
+
 def _feature_columns(df: pl.DataFrame, feature_set: str) -> list[str]:
-    """`xcross`/`xcrossot` as documented; the `_noent` suffix drops the entropy block
-    (the ablation that isolates the contribution of the spatial-entropy features)."""
-    drop_entropy = feature_set.endswith("_noent")
-    base = feature_set.removesuffix("_noent")
+    """Select columns for a feature-set spec: `<base>[_noent][__base|__drop-<block> ...]`.
+
+    `xcross` keeps start-frame features only; `xcrossot` adds the destination block. `_noent`
+    drops the entropy block; `__base` drops every new block (the previous version) and
+    `__drop-<block>` drops a single one — these drive the new-vs-previous block ablation.
+    """
+    head, *suffixes = feature_set.split(BLOCK_SEP)
+    drop_entropy = head.endswith("_noent")
+    base = head.removesuffix("_noent")
+    drop_blocks = _blocks_to_drop(suffixes)
+    drop_prefixes = [NEW_BLOCK_PREFIXES[b] for b in drop_blocks]
+
     excluded = set(ID_COLS + LABEL_COLS)
     columns = [c for c in df.columns if c not in excluded]
     if base == "xcross":
-        columns = [c for c in columns if c not in OT_ONLY]
+        ot_prefixes = tuple(NEW_BLOCK_PREFIXES[b] for b in NEW_OT_BLOCKS)
+        columns = [c for c in columns if c not in OT_ONLY and not c.startswith(ot_prefixes)]
     if drop_entropy:
         columns = [c for c in columns if not c.startswith(ENTROPY_PREFIX)]
+    if drop_prefixes:
+        columns = [c for c in columns if not c.startswith(tuple(drop_prefixes))]
     return columns
 
 

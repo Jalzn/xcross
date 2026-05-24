@@ -746,6 +746,7 @@ dependencies = [
     { name = "numpy" },
     { name = "polars" },
     { name = "scikit-learn" },
+    { name = "scipy" },
     { name = "tqdm" },
     { name = "xgboost" },
 ]
@@ -765,6 +766,7 @@ requires-dist = [
     { name = "numpy", specifier = ">=2.4.6" },
     { name = "polars", specifier = ">=1.0" },
     { name = "scikit-learn", specifier = ">=1.8.0" },
+    { name = "scipy", specifier = ">=1.13" },
     { name = "tqdm", specifier = ">=4.66" },
     { name = "xgboost", specifier = ">=3.2.0" },
 ]
