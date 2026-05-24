@@ -68,6 +68,13 @@ and **xCrossOT**. Columns:
 (`with_entropy`/`no_entropy`), `n_features`, and the key metrics (`auc`, `auc_pr`, `brier_skill`,
 `stability`, `icc`, `player_discrimination`).
 
+**Block ablation** (`ablation_blocks_{label}.csv` and `ablation_blocks_delta_{label}.csv`, from
+`uv run python -m xcross.model.ablation`) — the generalisation of the entropy ablation to **every
+feature block**: it scores the full feature set, the previous set (all new blocks removed) and each
+leave-one-block-out, giving each block's marginal effect on AUC, random/temporal stability, ICC and
+calibration. It is the evidence behind which feature blocks were kept or dropped — see
+[`model-evolution.md`](model-evolution.md).
+
 ## Columns of `ranking_final_{success,shot}.csv` (one ranking per label)
 
 | column | meaning |

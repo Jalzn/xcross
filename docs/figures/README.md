@@ -26,8 +26,8 @@ cp artifacts/reports/figures/lift_{xcross,xcrossot}_success.png docs/figures/
 cp artifacts/reports/figures/chart_importance_{xcross,xcrossot}_success.png docs/figures/
 cp artifacts/reports/figures/chart_by_{league,position}_success.png docs/figures/
 cp artifacts/reports/figures/chart_stability_vs_n_success.png docs/figures/
-cp artifacts/reports/figures/chart_reliability_success.png docs/figures/   # paper-comparison.md
-cp artifacts/reports/figures/chart_ablation_success.png docs/figures/      # paper-comparison.md
+cp artifacts/reports/figures/chart_reliability_success.png docs/figures/   # README Evolution
+cp artifacts/reports/figures/chart_ablation_success.png docs/figures/      # README Evolution
 ```
 
 Keep this folder a small, stable snapshot — not every figure the report produces. The full

@@ -1,10 +1,8 @@
 # Papers
 
-The versioned record of the xCross method's evolution — one PDF per milestone. The repo's
-code, results and docs always track the latest version; these PDFs freeze each one. The LaTeX
-source is not tracked here.
+- [`xcross-v1.pdf`](xcross-v1.pdf) — the first paper written for this model: the spatial
+  representation, the entropy and pitch-control features, and the xCross / xCrossOT split.
 
-- [`xcross-v1.pdf`](xcross-v1.pdf) — the original method.
-- [`xcross-v2.pdf`](xcross-v2.pdf) — current: v2 dataset, leak-free out-of-fold validation,
-  and the reliability / predictive-validity / ablation results. What changed versus v1 is in
-  [`../docs/paper-comparison.md`](../docs/paper-comparison.md).
+The model has evolved substantially since this paper. How it developed — and the current results —
+is tracked in [`../docs/model-evolution.md`](../docs/model-evolution.md); the code, results and docs
+in this repo always reflect the latest state. The LaTeX source is not tracked here.
