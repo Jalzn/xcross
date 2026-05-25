@@ -14,6 +14,7 @@ from xcross.model.evaluate import (
     split_half_stability,
     spread,
     temporal_split_stability,
+    topk_overlap_temporal,
 )
 
 
@@ -77,6 +78,26 @@ def test_temporal_stability_low_when_trait_drifts():
     late = np.repeat(rng.random(30), 20)   # ... unrelated to their late level
     prob = np.where(early_mask, early, late)
     assert abs(temporal_split_stability(pid, prob, order_key, min_crosses=20)) < 0.4
+
+
+def test_topk_overlap_high_when_podium_persists():
+    rng = np.random.default_rng(0)
+    pid = np.repeat(np.arange(30), 20)
+    levels = rng.random(30)
+    prob = np.repeat(levels, 20) + rng.normal(0, 0.01, 600)  # stable across the whole timeline
+    order_key = np.tile(np.arange(20), 30)
+    assert topk_overlap_temporal(pid, prob, order_key, k=10, min_crosses=20) > 0.8
+
+
+def test_topk_overlap_low_when_podium_churns():
+    rng = np.random.default_rng(0)
+    pid = np.repeat(np.arange(30), 20)
+    order_key = np.tile(np.arange(20), 30)
+    early_mask = np.tile(np.arange(20) < 10, 30)
+    early = np.repeat(rng.random(30), 20)  # early podium ...
+    late = np.repeat(rng.random(30), 20)   # ... unrelated to the late podium
+    prob = np.where(early_mask, early, late)
+    assert topk_overlap_temporal(pid, prob, order_key, k=10, min_crosses=20) < 0.6
 
 
 def test_brier_skill_positive_when_better_than_baserate():
