@@ -101,6 +101,12 @@ def test_player_discrimination_positive_with_distinct_levels():
     assert player_discrimination(pid, prob, min_crosses=20) > 0.1
 
 
+def test_player_discrimination_nan_when_no_player_qualifies():
+    pid = np.repeat(np.arange(10), 5)
+    prob = np.repeat(np.linspace(0.1, 0.9, 10), 5)
+    assert np.isnan(player_discrimination(pid, prob, min_crosses=20))
+
+
 def test_lift_increases_for_informative_model():
     rng = np.random.default_rng(0)
     prob = rng.random(1000)
