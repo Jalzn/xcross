@@ -103,17 +103,19 @@ def _upload_with_retry(studio: Studio, local: str, remote: str, tries: int = 4) 
 def launch() -> int:
     _build_data_bundle()
     studio = _studio()
-    studio.start(Machine.CPU_SMALL)
-    try:
+    if "running" not in str(studio.status).lower():
+        studio.start(Machine.CPU_SMALL)
         _wait_running(studio)
+    try:
         _upload_with_retry(studio, str(BUNDLE), "data.tar.gz")
         print(studio.run(SETUP_CMD))
         try:
             studio.auto_sleep = False
         except Exception as error:
             print(f"warning: could not disable auto_sleep ({error})")
-        studio.switch_machine(MACHINE)
-        _wait_running(studio)
+        if str(MACHINE).lower() not in str(studio.machine).lower():
+            studio.switch_machine(MACHINE)
+            _wait_running(studio)
         sanity_out, sanity_code = studio.run_with_exit_code(SANITY_CMD)
         print(sanity_out)
         if sanity_code != 0 or "COEXIST_OK" not in sanity_out:
