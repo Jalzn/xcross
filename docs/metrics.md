@@ -12,7 +12,12 @@ does it **separate** crosses (discrimination)? and is the player ranking **repro
   *quality of the situation created*.
 - **xCrossOT** — adds the ball's **destination** (where it arrived). Measures the *danger
   of the delivery*.
-- Tabular estimators compared: **XGBoost**, **AdaBoost**, **CatBoost**.
+- Tabular estimators compared: **XGBoost**, **AdaBoost**, **CatBoost**, **LightGBM**,
+  **HistGradientBoosting**, **RandomForest** (bagging) and **LogisticRegression** (the linear
+  floor). **TabPFN** (a pretrained tabular transformer) is also scored, but in an isolated
+  process (`tabpfn_oof.py`) — its PyTorch OpenMP runtime segfaults alongside xgboost/lightgbm on
+  macOS. TabPFN appears in the comparison as a benchmark but is **not eligible as the headline
+  model** (the report cannot retrain it in-process); the headline is chosen among the others.
 - Calibration: **isotonic** or **sigmoid** (chosen by lowest ECE).
 - Validation: **5-fold out-of-fold**, `StratifiedGroupKFold` by match (the same match never
   appears in both train and test). Every metric is measured on the out-of-fold
@@ -38,6 +43,8 @@ does it **separate** crosses (discrimination)? and is the player ranking **repro
 | `std`, `p5..p95`, `range_5_95` | spread of the **raw** per-cross probabilities | higher = separates the deliveries more |
 | `player_discrimination` | standard deviation of the **per-player means** | higher = separates the players more |
 | `stability` | **split-half**: Spearman correlation between the rankings of two random halves of each player's crosses | higher = reproducible ranking |
+| `stability_temporal` | split-half but **chronological** (early vs late crosses): does early-season crossing predict late-season? The stricter test, and the **headline criterion for xCross** (xCrossOT is selected by AUC instead) | higher = the trait persists over time |
+| `topk_overlap_temporal` | fraction of the **top-15** players that persist between the early and late halves — does the *podium itself* reproduce, not just the overall order | higher = stable podium |
 | `icc` | **Intraclass Correlation**: fraction of variance that is *between* players (skill) vs *within* (per-cross noise). The canonical version of stability | 0 = pure noise, 1 = pure skill |
 
 > **Why a high `std` is not enough:** xCrossOT has a large `std` but low `stability`/`icc`
@@ -98,7 +105,8 @@ both labels already and have no suffix: `table_model_metrics`, `table_comparison
 
 **Tables** (raw values rendered):
 - `table_model_metrics.png` — the 4 final models (feature set × label) with the selected estimator.
-- `table_comparison.png` — the matrix of the 24 runs (feature set × label × estimator × calibration).
+- `table_comparison.png` — the matrix of every run (feature set × label × estimator × calibration),
+  including the isolated TabPFN benchmark.
 - `table_league_metrics_{label}.png` — metrics per league (generalisation), for **both** xCross and
   xCrossOT.
 
