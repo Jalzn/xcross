@@ -47,12 +47,18 @@ def run() -> int:
     logger.info(f"Loaded {df.height} crosses.")
 
     rows: list[dict] = []
+    oof: dict[str, object] = {
+        "cross_id": df["cross_id"], "crosser_player_id": df["crosser_player_id"],
+        "success": df["success"].cast(pl.Int8), "shot": df["shot_in_window"].cast(pl.Int8),
+    }
     for feature_set in FEATURE_SETS:
         for label in LABEL_COLS:
             X, y, groups, _ = make_xy(df, feature_set, label)
             for name, factory in ESTIMATORS.items():
                 for calibration in CALIBRATIONS:
                     prob = oof_predict(factory, X, y, groups, calibration)
+                    label_name = "shot" if label == "shot_in_window" else label
+                    oof[f"{name}__{feature_set}__{label_name}__{calibration}"] = prob
                     record = metrics(y, prob, player_ids, order_key)
                     rows.append({
                         "feature_set": feature_set, "label": label,
@@ -64,6 +70,9 @@ def run() -> int:
                         f"stab={record['stability']:.2f} stab_t={record['stability_temporal']:.2f} "
                         f"icc={record['icc']:.2f}"
                     )
+
+    pl.DataFrame(oof).write_parquet(METRICS_DIR / "oof_matrix.parquet")
+    logger.info(f"Wrote oof_matrix.parquet ({len(oof) - 4} model columns).")
 
     table = pl.DataFrame(rows)
     if "--no-tabpfn" not in sys.argv:
