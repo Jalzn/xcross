@@ -75,7 +75,7 @@ def run() -> int:
     logger.info(f"Wrote oof_matrix.parquet ({len(oof) - 4} model columns).")
 
     table = pl.DataFrame(rows)
-    if "--no-tabpfn" not in sys.argv:
+    if "tabpfn" not in ESTIMATORS and "--no-tabpfn" not in sys.argv:
         table = _append_tabpfn(table)
     table.write_csv(METRICS_DIR / "comparison.csv")
     logger.info(f"Wrote comparison.csv ({table.height} rows).")
