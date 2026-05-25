@@ -10,9 +10,9 @@ Then:
 
     uv run --with lightning-sdk python scripts/run_tabpfn_lightning.py
 
-It bundles the code plus the ~59 MB of parquets tabpfn_oof needs into one tarball, uploads
-it on a cheap CPU machine, switches to an L4 to run the benchmark, and downloads
-comparison_tabpfn.csv into artifacts/.
+The studio gets the code by cloning the pushed branch; only the ~59 MB of parquets that
+tabpfn_oof needs (gitignored) are uploaded, as one tarball. It uploads on a cheap CPU
+machine, switches to an L4 to compute, and downloads comparison_tabpfn.csv into artifacts/.
 """
 
 from __future__ import annotations
@@ -30,11 +30,13 @@ STAGING = ROOT / ".lightning_upload"
 BUNDLE = ROOT / ".lightning_bundle.tar.gz"
 STUDIO_NAME = "xcross-tabpfn"
 REMOTE = "xcross"
+BRANCH = "models/expand-registry-eval"
+REPO_URL = "https://github.com/Jalzn/xcross.git"
 RESULT = "artifacts/reports/metrics/comparison_tabpfn.csv"
-CONFIG_FILES = ("pyproject.toml", "uv.lock", ".python-version")
 DATA_GLOBS = ("data/features/*/*/*/features.parquet", "data/processed/*/*/*/meta.parquet")
 SETUP_CMD = (
-    f"mkdir -p ~/{REMOTE} && tar xzf ~/bundle.tar.gz -C ~/{REMOTE} && cd ~/{REMOTE} && "
+    f"rm -rf ~/{REMOTE} && git clone --depth 1 -b {BRANCH} {REPO_URL} ~/{REMOTE} && "
+    f"tar xzf ~/data.tar.gz -C ~/{REMOTE} && cd ~/{REMOTE} && "
     "curl -LsSf https://astral.sh/uv/install.sh | sh && export PATH=$HOME/.local/bin:$PATH && "
     "uv sync && uv run python -c 'import torch; print(\"CUDA available:\", torch.cuda.is_available())'"
 )
@@ -44,12 +46,9 @@ BENCHMARK_CMD = (
 )
 
 
-def _build_bundle() -> None:
+def _build_data_bundle() -> None:
     if STAGING.exists():
         shutil.rmtree(STAGING)
-    shutil.copytree(ROOT / "xcross", STAGING / "xcross", ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
-    for name in CONFIG_FILES:
-        shutil.copy2(ROOT / name, STAGING / name)
     for pattern in DATA_GLOBS:
         for src in ROOT.glob(pattern):
             dst = STAGING / src.relative_to(ROOT)
@@ -77,16 +76,16 @@ def _wait_running(studio: Studio, timeout: int = 900) -> None:
 
 
 def run() -> int:
-    _build_bundle()
+    _build_data_bundle()
     studio = _studio()
     studio.start(Machine.CPU_SMALL)
     try:
         _wait_running(studio)
-        studio.upload_file(str(BUNDLE), "bundle.tar.gz")
+        studio.upload_file(str(BUNDLE), "data.tar.gz")
+        print(studio.run(SETUP_CMD))
 
         studio.switch_machine(Machine.L4)
         _wait_running(studio)
-        print(studio.run(SETUP_CMD))
         print(studio.run(BENCHMARK_CMD))
 
         (ROOT / RESULT).parent.mkdir(parents=True, exist_ok=True)
