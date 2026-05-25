@@ -33,7 +33,9 @@ _PATH = "export PATH=$HOME/.local/bin:$PATH"
 _ENV = "XCROSS_TABPFN=1 XCROSS_TABPFN_DEVICE=cuda OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1"
 SETUP_CMD = (
     f"if [ -d ~/{REMOTE}/.git ]; then cd ~/{REMOTE} && git fetch --depth 1 origin {BRANCH} && "
-    f"git reset --hard FETCH_HEAD; else git clone --depth 1 -b {BRANCH} {REPO_URL} ~/{REMOTE}; fi && "
+    f"git reset --hard FETCH_HEAD; "
+    f"else mv ~/{REMOTE} ~/{REMOTE}.bad.$(date +%s) 2>/dev/null; "
+    f"git clone --depth 1 -b {BRANCH} {REPO_URL} ~/{REMOTE}; fi && "
     f"tar xzf ~/data.tar.gz -C ~/{REMOTE} && cd ~/{REMOTE} && "
     f"curl -LsSf https://astral.sh/uv/install.sh | sh && {_PATH} && uv sync"
 )
