@@ -34,7 +34,10 @@ FIGURES = ROOT / "artifacts" / "reports" / "figures"
 LABELS = ("success", "shot")
 FEATURE_SETS = ("xcross", "xcrossot")
 FEATURE_COLOR = {"xcross": "#1f77b4", "xcrossot": "#d62728"}
-ESTIMATOR_MARKER = {"xgboost": "o", "adaboost": "s", "catboost": "^"}
+ESTIMATOR_MARKER = {
+    "xgboost": "o", "adaboost": "s", "catboost": "^", "lightgbm": "D",
+    "histgb": "v", "random_forest": "P", "logreg": "X", "tabpfn": "*",
+}
 
 
 def _fmt(value: object) -> str:
@@ -69,9 +72,9 @@ def table_model_metrics() -> None:
 def table_comparison() -> None:
     c = pl.read_csv(METRICS / "comparison.csv").sort(["label", "feature_set", "estimator", "calibration"])
     cols = [c2 for c2 in ["feature_set", "label", "estimator", "calibration", "auc", "auc_pr",
-                          "brier_skill", "ece", "stability", "icc"] if c2 in c.columns]
+                          "brier_skill", "ece", "stability", "stability_temporal", "icc"] if c2 in c.columns]
     rows = [[_fmt(v) for v in r] for r in c.select(cols).iter_rows()]
-    _save_table(cols, rows, "Comparison matrix (24 runs)", "table_comparison.png")
+    _save_table(cols, rows, "Comparison matrix (all runs)", "table_comparison.png")
 
 
 def chart_tradeoff() -> None:
@@ -83,7 +86,7 @@ def chart_tradeoff() -> None:
                    alpha=0.5 if r["calibration"] == "sigmoid" else 1.0, edgecolor="black", linewidth=0.6)
     ax.set_xlabel("AUC — per-cross discrimination (higher = better)")
     ax.set_ylabel("Split-half stability — ranking reproducibility (higher = better)")
-    ax.set_title("Trade-off: discrimination × ranking stability (all 24 runs)")
+    ax.set_title("Trade-off: discrimination × ranking stability (all runs)")
     ax.grid(alpha=0.3)
     legend = ([Patch(facecolor=FEATURE_COLOR[k], label=k) for k in FEATURE_COLOR]
               + [Line2D([0], [0], marker=m, color="gray", linestyle="", label=e) for e, m in ESTIMATOR_MARKER.items()]
