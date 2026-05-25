@@ -25,7 +25,7 @@ STUDIO_NAME = "xcross-pipeline"
 REMOTE = "xcross"
 BRANCH = "models/expand-registry-eval"
 REPO_URL = "https://github.com/Jalzn/xcross.git"
-MACHINE = Machine.A100
+MACHINE = Machine.L4
 REPORTS = "artifacts/reports"
 DATA_GLOBS = ("data/features/*/*/*/features.parquet", "data/processed/*/*/*/meta.parquet")
 
