@@ -87,7 +87,7 @@ def _tabpfn() -> ClassifierMixin:
         _tabpfn_weights = hf_hub_download(TABPFN_REPO, TABPFN_CKPT)
     return TabPFNClassifier(
         model_path=_tabpfn_weights, device=os.environ.get("XCROSS_TABPFN_DEVICE", "cpu"),
-        random_state=SEED, ignore_pretraining_limits=True,
+        random_state=SEED, ignore_pretraining_limits=True, memory_saving_mode=True,
     )
 
 

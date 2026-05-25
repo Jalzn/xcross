@@ -33,7 +33,10 @@ DONE, FAILED = "~/PIPELINE_DONE", "~/PIPELINE_FAILED"
 DATA_GLOBS = ("data/features/*/*/*/features.parquet", "data/processed/*/*/*/meta.parquet")
 
 _PATH = "export PATH=$HOME/.local/bin:$PATH"
-_ENV = "XCROSS_TABPFN=1 XCROSS_TABPFN_DEVICE=cuda OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1"
+_ENV = (
+    "XCROSS_TABPFN=1 XCROSS_TABPFN_DEVICE=cuda PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True "
+    "OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1"
+)
 SETUP_CMD = (
     f"if [ -d ~/{REMOTE}/.git ]; then cd ~/{REMOTE} && git fetch --depth 1 origin {BRANCH} && "
     f"git reset --hard FETCH_HEAD; else mv ~/{REMOTE} ~/{REMOTE}.bad.$(date +%s) 2>/dev/null; "
