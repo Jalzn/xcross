@@ -80,13 +80,12 @@ and show *where* each acts:
 |---|---|
 | ![Feature importance, xCross](docs/figures/chart_importance_xcross_success.png) | ![Feature importance, xCrossOT](docs/figures/chart_importance_xcrossot_success.png) |
 
-For **xCross**, **pressure on the crosser** (`pressure_crosser_nearest_def`) is the single strongest
-feature, ahead of far-post attacking-shape entropy (`entropy_attack_in_second_post`) and central-box
-pitch control, with goalkeeper geometry (`gk_ball_distance`) and the defensive block
-(`shape_last_line_to_gk_gap`) contributing. For **xCrossOT** the arrival-zone entropy
-(`entropy_attack_in_zone`) leads, with **whether the ball clears the keeper** (`clearance_over_keeper`)
-right behind and the cross's **3D pace** (`flight_pace_3d`) in the top five — the ball's `z`, previously
-unused, is now front-line signal alongside the arrival location (`distance_from_end_line`, `end_y`).
+For **xCross**, **far-post attacking-shape entropy** (`entropy_attack_in_second_post`) is the single
+strongest feature, ahead of central-box attacking entropy (`entropy_attack_in_center_box`), with
+goalkeeper geometry (`gk_lateral_speed`, `gk_ball_distance`) contributing. For **xCrossOT** the
+arrival-zone entropy (`entropy_attack_in_zone`) leads, with the arrival location (`end_y`), the cross's
+**3D pace** (`flight_pace_3d`) and **whether the ball clears the keeper** (`clearance_over_keeper`) all in
+the top five — the ball's `z`, previously unused, is now front-line signal.
 
 ## Results
 
@@ -94,21 +93,22 @@ unused, is now front-line signal alongside the arrival location (`distance_from_
 > [`docs/figures/`](docs/figures/) (see that folder's README). The full set and the meaning
 > of every metric are documented in [`docs/metrics.md`](docs/metrics.md).
 
-Everything below is measured on **≈7,500 crosses from 776 matches** across three leagues
-(Brasileirão 2023, Premier League 2024–25, Bundesliga 2025–26), on out-of-fold probabilities.
+Everything below is measured on **≈11,700 crosses from 1,183 matches** across four competitions
+(Brasileirão 2023, Premier League 2023–24 and 2024–25, Champions League 2023–24, Bundesliga
+2025–26), on out-of-fold probabilities.
 
-**Final models** (AdaBoost selected for all four; full metric definitions in
-[`docs/metrics.md`](docs/metrics.md)):
+**Final models** (AdaBoost for three targets, CatBoost for xCrossOT `success`; full metric
+definitions in [`docs/metrics.md`](docs/metrics.md)):
 
 | Model | Target | AUC | ECE | Stability | ICC |
 |---|---|---|---|---|---|
-| xCross | `success` | 0.57 | 0.010 | **0.78** | 0.14 |
-| xCross | `shot` | 0.57 | 0.009 | 0.66 | 0.12 |
-| xCrossOT | `success` | **0.81** | 0.006 | 0.28 | 0.03 |
-| xCrossOT | `shot` | 0.73 | 0.009 | 0.36 | 0.03 |
+| xCross | `success` | 0.58 | 0.013 | **0.73** | 0.13 |
+| xCross | `shot` | 0.58 | 0.007 | 0.72 | 0.14 |
+| xCrossOT | `success` | **0.84** | 0.007 | 0.35 | 0.02 |
+| xCrossOT | `shot` | 0.73 | 0.011 | 0.42 | 0.04 |
 
-xCrossOT discriminates best (AUC up to 0.81) while xCross gives the more reproducible ranking
-(stability 0.78 vs 0.28) — the core trade-off charted below.
+xCrossOT discriminates best (AUC up to 0.84) while xCross gives the more reproducible ranking
+(stability 0.73 vs 0.35) — the core trade-off charted below.
 
 **Are the probabilities calibrated?** Both models track the diagonal across the range and ECE
 stays under 0.01:
@@ -121,7 +121,7 @@ stays under 0.01:
 predicted-probability decile. The black line (mean predicted) hugging the bars re-confirms the
 calibration above; the bars climbing left-to-right show the *ordering*. The gap between the two
 models is the discrimination difference made visual: xCross lifts the success rate from ~23% to
-~42% across deciles, xCrossOT from ~1% to ~74% (AUC 0.57 vs 0.81):
+~43% across deciles, xCrossOT from ~0% to ~82% (AUC 0.58 vs 0.84):
 
 | xCross | xCrossOT |
 |---|---|
@@ -133,9 +133,9 @@ under the stricter chronological split:
 
 | Ranking by | Stability (random halves) | Stability (temporal) | ICC |
 |---|---|---|---|
-| Raw success rate | 0.06 | 0.07 | 0.01 |
-| **xCross** | **0.78** | **0.71** | **0.14** |
-| xCrossOT | 0.28 | 0.17 | 0.03 |
+| Raw success rate | 0.05 | −0.01 | 0.01 |
+| **xCross** | **0.73** | **0.66** | **0.13** |
+| xCrossOT | 0.35 | 0.20 | 0.02 |
 
 **Player ranking by xCross (creation quality), with 95% CI** — left, crosses that end in a
 successful shot (`success`); right, crosses that end in any shot (`shot`):
@@ -155,7 +155,7 @@ successful shot (`success`); right, crosses that end in any shot (`shot`):
 ![Discrimination vs stability](docs/figures/chart_tradeoff.png)
 
 **Generalisation — does it hold across leagues and positions?** Metrics are stable
-league-to-league (full seasons: Brasileirão, Premier League), and the per-position xCross
+league-to-league (Brasileirão, Premier League, Champions League), and the per-position xCross
 distribution behaves as expected — central midfielders and attacking mids score highest,
 wingers and full-backs lower:
 
@@ -164,8 +164,8 @@ wingers and full-backs lower:
 | ![Metrics per league](docs/figures/chart_by_league_success.png) | ![xCross by position](docs/figures/chart_by_position_success.png) |
 
 **How many players can we rank?** Stability climbs with sample size — ~0.62 at ≥10 crosses,
-~0.83 at ≥50 — so the ranking uses a **≥20-cross** cut-off. That bar admits only ~13% of
-crossers, though they account for ~50% of all crosses:
+~0.81 at ≥50 — so the ranking uses a **≥20-cross** cut-off. That bar admits only ~13% of
+crossers, though they account for ~55% of all crosses:
 
 ![Stability vs minimum crosses](docs/figures/chart_stability_vs_n_success.png)
 
@@ -177,12 +177,11 @@ each milestone and its measured effect on the results** — is tracked in
 
 The **first paper we wrote for this model** is [`papers/xcross-v1.pdf`](papers/xcross-v1.pdf). The
 model has moved on substantially since then — leakage-free out-of-fold validation, robust calibration,
-three leagues, and the expanded feature set above — all captured in the evolution log.
+four competitions, and the expanded feature set above — all captured in the evolution log.
 
 Two pieces of evidence underpin the current results: the player ranking is **reproducible** (ranking by
-the raw success rate is noise at stability 0.06, while xCross recovers a stable 0.78), and the
-**entropy features help but are not dominant** (removing them costs only ~0.01–0.015 AUC, the gain
-concentrated in xCrossOT):
+the raw success rate is noise at stability 0.05, while xCross recovers a stable 0.73), and the
+**entropy features help but are not dominant** (removing them costs ~0.005–0.010 AUC):
 
 | Ranking reproducibility — raw rate vs. the models | Entropy ablation — with vs. without |
 |---|---|
