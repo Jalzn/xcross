@@ -13,7 +13,8 @@ and how the numbers moved — not code changes.
 |---|---|---|---|---|---|
 | **Spatial-situation scoring** | score the cross's spatial configuration — positional entropy + pitch control — instead of its raw outcome; two views, xCross (creation) and xCrossOT (danger) | 0.62\* | not measured | 0.74\* | breaks above ~0.7 |
 | **Leakage-free validation & scale** | out-of-fold grouped by match, nested calibration, three leagues, and the first proof the ranking reproduces | 0.57 | 0.76 | 0.78 | ECE < 0.01 |
-| **Feature expansion** *(current, 2026-05)* | add spatial-configuration, ball-flight (`z`) and temporal features | 0.57 | **0.78** | **0.81** | ECE < 0.01 |
+| **Feature expansion** *(2026-05)* | add spatial-configuration, ball-flight (`z`) and temporal features | 0.57 | 0.78 | 0.81 | ECE < 0.01 |
+| **Dataset expansion** *(current, 2026-05)* | 7,510 → 11,677 crosses across four competitions (+ Premier League 2023-24, + Champions League 2023-24); xCrossOT/success → CatBoost | 0.58 | 0.73 | **0.84** | ECE < 0.01 |
 
 \* The earliest AUCs were measured on a smaller, single-league dataset with a single train/test split
 (and match leakage), so they are **not** directly comparable to the later numbers — the xCross drop
@@ -54,7 +55,7 @@ The idea was unchanged; **how it was trained, validated and evidenced** changed.
   *helps but is not dominant*, concentrating in xCrossOT.
 - **xCrossOT AUC reached 0.78** with the extra data; danger > creation held.
 
-## 3 · Feature expansion (current)
+## 3 · Feature expansion
 
 Until now the model scored each cross from two map families only — **positional entropy** and **pitch
 control** — plus the ball's start/end geometry. This step adds three families of features that the
@@ -195,3 +196,39 @@ discrimination features (e.g. ball height at the strike), label variance, and ra
 The experiment harness (the pluggable density fields and the out-of-fold comparison runner) is kept on
 the `features/entropy-influence-field` branch for reproducibility; it is deliberately **not merged**,
 since the probe is negative and production keeps the original field.
+
+## 5 · Dataset expansion (current)
+
+Same model, more data. The set grew from 7,510 crosses (three competitions) to **11,677 across four** —
+adding Premier League 2023-24 and Champions League 2023-24 from the same PFF source. World Cup 2022 was
+processed but **left out of the model**: a national-team knockout is a different population from club
+crossing (and no player reaches the 20-cross ranking cut-off in it).
+
+### Results — before vs after (out-of-fold)
+
+| Model | Target | AUC | Stability (split-half) | ICC |
+|---|---|---|---|---|
+| xCross | `success` | 0.571 → 0.578 | 0.776 → 0.735 | 0.136 → 0.130 |
+| xCross | `shot` | 0.567 → 0.582 | 0.659 → 0.717 | 0.118 → 0.139 |
+| xCrossOT | `success` | 0.810 → **0.838** | 0.280 → 0.354 | 0.029 → 0.024 |
+| xCrossOT | `shot` | 0.734 → 0.727 | 0.357 → 0.416 | 0.033 → 0.038 |
+
+xCrossOT/`success` switched estimator AdaBoost → **CatBoost**, which dominates it on this data (higher AUC
+*and* stability); the three other targets stay on AdaBoost (it keeps the same AUC with clearly better
+stability — the ranking objective).
+
+### What the numbers say
+
+- **More data is not the lever for xCross.** AUC held at ~0.58 with 1.5× the data — confirming the
+  ceiling is *signal at the moment of the cross*, not sample size. A controlled test (train without
+  Premier League 2024-25, then predict it) showed the real gain comes from **same-league** data, not raw
+  volume, with sharply diminishing returns.
+- **The model generalises across leagues.** Per-league AUC is consistent (xCross ~0.57-0.58, xCrossOT
+  ~0.82-0.84 across Brasileirão, Premier League, Champions League), and temporal validation ≈ the random
+  split — no league confound inflating the headline numbers.
+- **A richer ranking.** Premier League over two seasons lifts the ranked pool to 163 crossers (from 115),
+  and lets a crosser be measured *across seasons*.
+
+A bug surfaced by the multi-competition data was fixed: `player_discrimination` crashed on a competition
+where no player reached the 20-cross cut-off (knockout ties); it now returns `nan`, like the other
+ranking metrics.
