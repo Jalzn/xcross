@@ -11,7 +11,7 @@ import glob
 import numpy as np
 import polars as pl
 
-from xcross.config import FEATURES_ROOT
+from xcross.config import FEATURES_ROOT, PROCESSED_ROOT
 
 ID_COLS = ["cross_id", "match_id", "league", "season", "crosser_player_id", "crosser_team_id"]
 LABEL_COLS = ["success", "shot_in_window"]
@@ -44,6 +44,13 @@ def load_features() -> pl.DataFrame:
     files = sorted(glob.glob(str(FEATURES_ROOT / "*" / "*" / "*" / "features.parquet")))
     frames = [pl.read_parquet(f) for f in files]
     return pl.concat([f for f in frames if f.width > 0])
+
+
+def match_dates() -> dict[str, str]:
+    """match_id -> ISO date (sorts chronologically as a string) for the temporal split."""
+    files = glob.glob(str(PROCESSED_ROOT / "*" / "*" / "*" / "meta.parquet"))
+    meta = pl.concat([pl.read_parquet(f) for f in files]).unique("match_id")
+    return dict(zip(meta["match_id"].to_list(), meta["date"].to_list(), strict=True))
 
 
 def _blocks_to_drop(suffixes: list[str]) -> set[str]:

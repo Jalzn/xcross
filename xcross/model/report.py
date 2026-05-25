@@ -24,7 +24,7 @@ from loguru import logger
 from sklearn.inspection import PartialDependenceDisplay
 
 from xcross.config import ROOT
-from xcross.model.dataset import load_features, make_xy
+from xcross.model.dataset import load_features, make_xy, match_dates
 from xcross.model.estimators import ESTIMATORS
 from xcross.model.evaluate import (
     combined_ranking,
@@ -57,13 +57,6 @@ def _roster() -> pl.DataFrame:
         .unique("player_id")
         .select("player_id", "nickname", "position_group")
     )
-
-
-def _match_dates() -> dict[str, str]:
-    """match_id -> ISO date (sorts chronologically as a string) for the temporal stability split."""
-    files = glob.glob(str(ROOT / "data" / "processed" / "*" / "*" / "*" / "meta.parquet"))
-    meta = pl.concat([pl.read_parquet(f) for f in files]).unique("match_id")
-    return dict(zip(meta["match_id"].to_list(), meta["date"].to_list(), strict=True))
 
 
 def _model_importance(estimator: str, X: np.ndarray, y: np.ndarray, names: list[str], tag: str) -> None:
@@ -145,7 +138,9 @@ def run() -> int:
     groups = X["xcross"][2]
 
     comparison = load_comparison()
-    choice = {(fs, label): select_best(comparison, fs, LABEL_COLUMN[label]) for fs in FEATURE_SETS for label in LABELS}
+    eligible = set(ESTIMATORS)
+    choice = {(fs, label): select_best(comparison, fs, LABEL_COLUMN[label], eligible=eligible)
+              for fs in FEATURE_SETS for label in LABELS}
 
     logger.info("OOF for the 4 targets with the selected models ...")
     oof = {(fs, label): oof_predict(ESTIMATORS[choice[(fs, label)]["estimator"]],
@@ -172,7 +167,7 @@ def run() -> int:
                                           X_noent[fs][0], y[label], groups, choice[(fs, label)]["calibration"])
                  for fs in FEATURE_SETS for label in LABELS}
 
-    dates = _match_dates()
+    dates = match_dates()
     order_key = np.array([dates.get(m, m) for m in df["match_id"].to_list()])
 
     roster = _roster()
