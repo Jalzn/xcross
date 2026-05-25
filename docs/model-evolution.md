@@ -130,3 +130,68 @@ output in `ablation_blocks_*.csv` / `ablation_blocks_delta_*.csv`) measures, per
 effect of removing it (full vs. leave-one-block-out) and the total effect of the whole step (full vs.
 the previous feature set), on AUC, random and temporal stability, ICC and calibration. Blocks were kept
 or pruned on that evidence.
+
+## 4 · Influence-field probe (no change adopted)
+
+A representation probe, not a feature step. Since the start, the entropy map turns each player into a
+density by **projecting them 1 s ahead along their velocity** (`pos + v·t`) and smoothing with an
+isotropic gaussian KDE. The question: is that deterministic projection injecting per-play velocity
+noise — the same kind that made the `dynamics` block raise AUC but wreck stability — into the map?
+
+The occupancy field was made pluggable (so only the density model changes; pitch-control held fixed)
+and three alternatives were scored against the same régua, out-of-fold over the full set:
+
+- **static** — drop the projection, smooth the current position;
+- **anisotropic** — keep the position but turn velocity into *uncertainty*: a gaussian stretched along
+  the direction of motion (spread grows with speed) instead of a displaced centre;
+- **voronoi** — a different paradigm: hard winner-take-all assignment, each cell taking only its
+  *nearest* player's kernel instead of the additive sum (no KDE pile-up in crowded areas).
+
+| Model | Target | random split-half | **temporal split-half** | ICC |
+|---|---|---|---|---|
+| projected (current) | xCross `success` | 0.776 | **0.710** | 0.136 |
+| static | xCross `success` | 0.806 (+0.030) | 0.655 (−0.055) | 0.140 |
+| anisotropic | xCross `success` | 0.714 (−0.061) | 0.636 (−0.074) | 0.128 |
+| voronoi | xCross `success` | 0.756 (−0.020) | 0.690 (−0.020) | 0.141 (+0.005) |
+
+**Result: negative — the projection carries signal, not noise.** `static` inflated the *random*
+split-half (+0.030) but the *temporal* split — the stricter "does early-season crossing predict
+late-season?" test — **regressed** (−0.055), with ICC flat; the apparent gain does not persist across
+the season. `anisotropic` was worse on every reliability axis and even flipped sign between a
+single-league pilot (+0.031) and the full set (−0.061). `voronoi` was the most balanced — the best
+calibration and a marginally higher ICC (+0.005) — but its temporal split still slipped (−0.020), so
+it too fell short of replacing the baseline; its one clean gain was on the secondary `shot` target
+(temporal +0.007). xCrossOT AUC barely moved for any of them (±0.003). So the velocity projection is
+a genuine, season-persistent part of the signal, and the model is left unchanged. The probe also
+re-confirmed the project's core lesson — **a higher random split-half is not a better ranking**; only
+the temporal split and ICC decide (cf. §2).
+
+**A second batch (fast, uncalibrated screen — relative deltas only).** To be sure the bottleneck was
+not just *these three* shapes, four more fields and one additive block were screened: `arrival` (a
+pitch-control-style influence as density), `soft_voronoi` (a 50/50 blend of the summed-KDE and the
+winner-take-all), `free_space` (entropy of the *gaps* instead of the players), `threat_weighted`
+(presence reweighted by goal proximity), and a structural block (convex-hull + Delaunay shape
+descriptors). On xCross `success`, against this screen's own baseline, only one moved the deciding
+(deterministic) temporal split the right way:
+
+| Field / block | temporal split-half (Δ vs screen baseline) |
+|---|---|
+| **soft_voronoi** | **+0.012** (also +ICC, +random, +AUC) |
+| arrival | −0.052 |
+| threat_weighted | −0.027 |
+| structural (additive) | −0.021 |
+| free_space | −0.10 |
+
+`soft_voronoi` was the only positive across all eight variants tried — but the gain is small and
+unconfirmed (uncalibrated), so it was not adopted either.
+
+**Bottom line.** Across three rounds (eight density models), none beats the production field on the
+temporal split for the player-ranking target. **Re-modelling the entropy map is not a lever.** This is
+distinct from "entropy is useless": the entropy *feature* still carries signal (the no-entropy
+ablation, concentrated in xCrossOT — §2/§3); the point is that its current representation is already
+near-optimal and cannot be squeezed further by reshaping the field. The levers lie elsewhere —
+discrimination features (e.g. ball height at the strike), label variance, and ranking shrinkage.
+
+The experiment harness (the pluggable density fields and the out-of-fold comparison runner) is kept on
+the `features/entropy-influence-field` branch for reproducibility; it is deliberately **not merged**,
+since the probe is negative and production keeps the original field.
