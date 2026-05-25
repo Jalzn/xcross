@@ -1,11 +1,13 @@
-"""Run the full xCross model-comparison pipeline on a Lightning AI GPU studio and download
-every artifact — reproducible end to end. The studio clones the pushed branch (code) and
-receives only the ~59 MB of parquets it needs; TabPFN runs as a first-class estimator on the
-GPU (XCROSS_TABPFN=1). A coexistence sanity check runs first, so if torch and xgboost/lightgbm
-clash on this host too, we abort before the heavy pipeline.
+"""Run the full xCross model-comparison pipeline on a Lightning AI GPU studio, detached, so
+it survives the local machine going to sleep. Two modes:
 
-    uv run --with lightning-sdk lightning login        # one-time
-    uv run --with lightning-sdk python scripts/run_pipeline_lightning.py
+    uv run --with lightning-sdk lightning login                                   # one-time
+    uv run --with lightning-sdk python scripts/run_pipeline_lightning.py launch   # start it
+    uv run --with lightning-sdk python scripts/run_pipeline_lightning.py collect  # when back
+
+`launch` uploads the data, clones the pushed branch, runs the coexistence sanity check, then
+fires the pipeline with nohup (it keeps running on the studio after we disconnect) and leaves
+the studio up. `collect` checks the done marker, downloads the artifacts and stops the studio.
 """
 
 from __future__ import annotations
@@ -27,14 +29,14 @@ BRANCH = "models/expand-registry-eval"
 REPO_URL = "https://github.com/Jalzn/xcross.git"
 MACHINE = Machine.L4
 REPORTS = "artifacts/reports"
+DONE, FAILED = "~/PIPELINE_DONE", "~/PIPELINE_FAILED"
 DATA_GLOBS = ("data/features/*/*/*/features.parquet", "data/processed/*/*/*/meta.parquet")
 
 _PATH = "export PATH=$HOME/.local/bin:$PATH"
 _ENV = "XCROSS_TABPFN=1 XCROSS_TABPFN_DEVICE=cuda OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1"
 SETUP_CMD = (
     f"if [ -d ~/{REMOTE}/.git ]; then cd ~/{REMOTE} && git fetch --depth 1 origin {BRANCH} && "
-    f"git reset --hard FETCH_HEAD; "
-    f"else mv ~/{REMOTE} ~/{REMOTE}.bad.$(date +%s) 2>/dev/null; "
+    f"git reset --hard FETCH_HEAD; else mv ~/{REMOTE} ~/{REMOTE}.bad.$(date +%s) 2>/dev/null; "
     f"git clone --depth 1 -b {BRANCH} {REPO_URL} ~/{REMOTE}; fi && "
     f"tar xzf ~/data.tar.gz -C ~/{REMOTE} && cd ~/{REMOTE} && "
     f"curl -LsSf https://astral.sh/uv/install.sh | sh && {_PATH} && uv sync"
@@ -46,12 +48,15 @@ SANITY_CMD = (
     "[ESTIMATORS[m]().fit(X, y) for m in (\"xgboost\", \"lightgbm\", \"tabpfn\")]; "
     "print(\"COEXIST_OK cuda=\", torch.cuda.is_available())'"
 )
-PIPELINE_CMD = (
-    f"cd ~/{REMOTE} && {_PATH} {_ENV} && "
+DETACH_CMD = (
+    f"cd ~/{REMOTE} && rm -f {DONE} {FAILED} && nohup bash -lc '"
+    f"{_PATH}; export {_ENV}; cd ~/{REMOTE} && "
     "uv run python -m xcross.model.compare && "
     "uv run python -m xcross.model.robustness && "
     "uv run python -m xcross.model.report && "
-    "uv run python -m xcross.model.comparison_figures"
+    "uv run python -m xcross.model.comparison_figures && "
+    f"touch {DONE} || touch {FAILED}"
+    f"' > ~/pipeline.log 2>&1 & echo LAUNCHED"
 )
 
 
@@ -84,7 +89,6 @@ def _wait_running(studio: Studio, timeout: int = 900) -> None:
 
 
 def _upload_with_retry(studio: Studio, local: str, remote: str, tries: int = 4) -> None:
-    """The upload endpoint returns transient 5xx now and then; retry the whole upload."""
     for attempt in range(tries):
         try:
             studio.upload_file(local, remote)
@@ -96,7 +100,7 @@ def _upload_with_retry(studio: Studio, local: str, remote: str, tries: int = 4) 
             time.sleep(30)
 
 
-def run() -> int:
+def launch() -> int:
     _build_data_bundle()
     studio = _studio()
     studio.start(Machine.CPU_SMALL)
@@ -104,26 +108,48 @@ def run() -> int:
         _wait_running(studio)
         _upload_with_retry(studio, str(BUNDLE), "data.tar.gz")
         print(studio.run(SETUP_CMD))
-
+        try:
+            studio.auto_sleep = False
+        except Exception as error:
+            print(f"warning: could not disable auto_sleep ({error})")
         studio.switch_machine(MACHINE)
         _wait_running(studio)
         sanity_out, sanity_code = studio.run_with_exit_code(SANITY_CMD)
         print(sanity_out)
         if sanity_code != 0 or "COEXIST_OK" not in sanity_out:
-            raise RuntimeError(f"coexistence sanity failed (exit {sanity_code}); TabPFN can't share the process here")
-
-        pipeline_out, pipeline_code = studio.run_with_exit_code(PIPELINE_CMD)
-        print(pipeline_out)
-        if pipeline_code != 0:
-            raise RuntimeError(f"pipeline failed (exit {pipeline_code})")
-
-        studio.download_folder(f"{REMOTE}/{REPORTS}/metrics", str(ROOT / REPORTS / "metrics"))
-        studio.download_folder(f"{REMOTE}/{REPORTS}/figures", str(ROOT / REPORTS / "figures"))
-        print("Downloaded artifacts.")
-    finally:
+            raise RuntimeError(f"coexistence sanity failed (exit {sanity_code})")
+        print(studio.run(DETACH_CMD))
+    except Exception:
         studio.stop()
-        print("Studio stopped.")
+        raise
+    print("Pipeline launched detached; the studio stays up. Safe to disconnect.")
+    print("When back:  uv run --with lightning-sdk python scripts/run_pipeline_lightning.py collect")
     return 0
+
+
+def collect() -> int:
+    studio = _studio()
+    if "running" not in str(studio.status).lower():
+        studio.start(MACHINE)
+        _wait_running(studio)
+    status, _ = studio.run_with_exit_code(
+        f"test -f {DONE} && echo PIPELINE_DONE || (test -f {FAILED} && echo PIPELINE_FAILED || echo RUNNING); "
+        "echo '--- tail ---'; tail -5 ~/pipeline.log"
+    )
+    print(status)
+    if "PIPELINE_DONE" not in status:
+        print("Not finished yet — leaving the studio up. Re-run collect later.")
+        return 1
+    studio.download_folder(f"{REMOTE}/{REPORTS}/metrics", str(ROOT / REPORTS / "metrics"))
+    studio.download_folder(f"{REMOTE}/{REPORTS}/figures", str(ROOT / REPORTS / "figures"))
+    studio.stop()
+    print("Downloaded artifacts and stopped the studio.")
+    return 0
+
+
+def run() -> int:
+    mode = sys.argv[1] if len(sys.argv) > 1 else "launch"
+    return collect() if mode == "collect" else launch()
 
 
 if __name__ == "__main__":
