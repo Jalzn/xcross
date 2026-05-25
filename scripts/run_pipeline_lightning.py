@@ -80,13 +80,26 @@ def _wait_running(studio: Studio, timeout: int = 900) -> None:
     raise TimeoutError(f"studio not running after {timeout}s (status={studio.status})")
 
 
+def _upload_with_retry(studio: Studio, local: str, remote: str, tries: int = 4) -> None:
+    """The upload endpoint returns transient 5xx now and then; retry the whole upload."""
+    for attempt in range(tries):
+        try:
+            studio.upload_file(local, remote)
+            return
+        except Exception as error:
+            if attempt == tries - 1:
+                raise
+            print(f"upload attempt {attempt + 1} failed ({error}); retrying in 30s")
+            time.sleep(30)
+
+
 def run() -> int:
     _build_data_bundle()
     studio = _studio()
     studio.start(Machine.CPU_SMALL)
     try:
         _wait_running(studio)
-        studio.upload_file(str(BUNDLE), "data.tar.gz")
+        _upload_with_retry(studio, str(BUNDLE), "data.tar.gz")
         print(studio.run(SETUP_CMD))
 
         studio.switch_machine(MACHINE)
