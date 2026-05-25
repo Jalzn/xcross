@@ -21,7 +21,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import polars as pl
 from loguru import logger
-from sklearn.inspection import PartialDependenceDisplay
+from sklearn.inspection import PartialDependenceDisplay, permutation_importance
 
 from xcross.config import ROOT
 from xcross.model.dataset import load_features, make_xy, match_dates
@@ -59,10 +59,22 @@ def _roster() -> pl.DataFrame:
     )
 
 
+def _feature_importance(model: object, X: np.ndarray, y: np.ndarray) -> np.ndarray:
+    """Native feature_importances_ for tree models; permutation importance on AUC otherwise
+    (model-agnostic — covers logreg and TabPFN, which expose no native importance)."""
+    if hasattr(model, "feature_importances_"):
+        return model.feature_importances_
+    result = permutation_importance(
+        model, X, y, scoring="roc_auc", n_repeats=5,
+        max_samples=min(2000, len(X)), random_state=0, n_jobs=-1,
+    )
+    return result.importances_mean
+
+
 def _model_importance(estimator: str, X: np.ndarray, y: np.ndarray, names: list[str], tag: str) -> None:
-    """Native feature importance of the *selected* final model — what we actually use."""
+    """Feature importance of the *selected* final model — what we actually use."""
     model = ESTIMATORS[estimator]().fit(X, y)
-    pl.DataFrame({"feature": names, "importance": model.feature_importances_}).sort(
+    pl.DataFrame({"feature": names, "importance": _feature_importance(model, X, y)}).sort(
         "importance", descending=True
     ).write_csv(METRICS / f"importance_{tag}.csv")
 
@@ -84,7 +96,7 @@ def _pdp_figure(estimator: str, X: np.ndarray, y: np.ndarray, names: list[str], 
     in chart_importance). Each panel shades the curve above/below the model's average
     prediction, and a rug shows where the real crosses lie."""
     model = ESTIMATORS[estimator]().fit(X, y)
-    top = np.argsort(model.feature_importances_)[::-1][:PDP_TOP]
+    top = np.argsort(_feature_importance(model, X, y))[::-1][:PDP_TOP]
     rng = np.random.default_rng(0)
     sample = X[rng.choice(len(X), min(PDP_SAMPLE, len(X)), replace=False)]
     baseline = float(model.predict_proba(sample)[:, 1].mean())
@@ -133,6 +145,7 @@ def run() -> int:
     df = load_features()
     player_ids = df["crosser_player_id"].to_numpy()
     leagues = df["league"].to_numpy()
+    order_key = np.array([match_dates().get(m, m) for m in df["match_id"].to_list()])
     X = {fs: make_xy(df, fs, "success") for fs in FEATURE_SETS}  # X identical across labels
     y = {label: df[LABEL_COLUMN[label]].cast(pl.Int8).to_numpy() for label in LABELS}
     groups = X["xcross"][2]
@@ -156,7 +169,8 @@ def run() -> int:
 
     pl.DataFrame([
         {"model": f"{fs}/{label}", "estimator": choice[(fs, label)]["estimator"],
-         "calibration": choice[(fs, label)]["calibration"], **metrics(y[label], oof[(fs, label)], player_ids)}
+         "calibration": choice[(fs, label)]["calibration"],
+         **metrics(y[label], oof[(fs, label)], player_ids, order_key)}
         for fs in FEATURE_SETS for label in LABELS
     ]).write_csv(METRICS / "model_metrics.csv")
 
@@ -166,9 +180,6 @@ def run() -> int:
     oof_noent = {(fs, label): oof_predict(ESTIMATORS[choice[(fs, label)]["estimator"]],
                                           X_noent[fs][0], y[label], groups, choice[(fs, label)]["calibration"])
                  for fs in FEATURE_SETS for label in LABELS}
-
-    dates = match_dates()
-    order_key = np.array([dates.get(m, m) for m in df["match_id"].to_list()])
 
     roster = _roster()
     for label in LABELS:
