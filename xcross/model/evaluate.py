@@ -77,6 +77,8 @@ def player_discrimination(
         .agg(pl.len().alias("n"), pl.col("prob").mean().alias("m"))
         .filter(pl.col("n") >= min_crosses)
     )
+    if means.height < 2:
+        return float("nan")
     return float(means["m"].std())
 
 
