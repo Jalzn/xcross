@@ -94,7 +94,10 @@ def collect() -> int:
     if "IMPORTANCE_DONE" not in status:
         return 1
     for name in RESULT_FILES:
-        studio.download_file(f"{REMOTE}/artifacts/reports/metrics/{name}", str(ROOT / "artifacts/reports/metrics" / name))
+        studio.download_file(
+            f"{REMOTE}/artifacts/reports/metrics/{name}",
+            str(ROOT / "artifacts/reports/metrics" / name),
+        )
         print(f"downloaded: {name}")
     studio.stop()
     print("Studio stopped.")
