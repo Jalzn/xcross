@@ -101,7 +101,7 @@ each league (player counts and `n` are per league), used by the per-league quadr
 
 Most figures are produced **for both labels** (`success`, `shot`) with a `_{label}` suffix, and a
 few per **(feature_set, label)** with a `_{xcross,xcrossot}_{label}` suffix. The exceptions cover
-both labels already and have no suffix: `table_model_metrics`, `table_comparison`, `chart_tradeoff`.
+both labels already and have no suffix: `table_model_metrics`, `table_comparison`.
 
 **Tables** (raw values rendered):
 - `table_model_metrics.png` — the 4 final models (feature set × label) with the selected estimator.
@@ -111,8 +111,17 @@ both labels already and have no suffix: `table_model_metrics`, `table_comparison
   xCrossOT.
 
 **Charts (per label):**
-- `chart_tradeoff.png` — AUC × stability of every run: none combines high discrimination **and** high
-  reproducibility (colour = feature set, marker = estimator, light = sigmoid).
+- `chart_model_tradeoff_{label}.png` — AUC × `stability_temporal` of every estimator, per
+  feature set; coloured by family (linear / bagging / boosting / foundation). Shows that no
+  model wins both axes — the headline is selected per objective.
+- `chart_model_robustness_{label}.png` — same metrics with **95% bootstrap CIs** (errorbars).
+- `chart_ranking_agreement_{label}.png` — heatmap of Spearman between the player rankings of
+  each pair of estimators.
+- `chart_calibration_compare_{label}.png` — reliability curves of every model overlaid (one
+  panel per feature set).
+- `chart_importance_compare_xcrossot_{label}.png` — top features of the xCrossOT headline vs.
+  TabPFN, normalised by each model's own max (shows convergence on the top + family-specific
+  divergence on the tail).
 - `chart_stability_vs_n_{label}.png` — stability vs. minimum crosses (and how many players remain).
 - `chart_ranking_top_{label}.png` — top 20 by xCross, with 95% CI.
 - `chart_ranking_quadrants_{label}.png` — **xCross × xCrossOT per player**, split into quadrants by
@@ -131,8 +140,6 @@ both labels already and have no suffix: `table_model_metrics`, `table_comparison
 **Per (feature_set, label):**
 - `chart_importance_{xcross,xcrossot}_{label}.png` — feature importance of the **final model** (the
   one we actually use, chosen per target).
-- `calibration_{xcross,xcrossot}_{label}.png` — left = calibration curve (predicted × observed,
-  closer to the diagonal is better), right = histogram of predicted probabilities (the spread).
 - `lift_{xcross,xcrossot}_{label}.png` — actual label rate per predicted-probability decile (ordering).
 - `pdp_{xcross,xcrossot}_{label}.png` — **partial-dependence** grid of the **final model**: for the
   9 most important features, how the predicted probability moves as the feature varies (the

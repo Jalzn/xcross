@@ -20,9 +20,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import polars as pl
 from loguru import logger
-from matplotlib.lines import Line2D
-from matplotlib.patches import Patch, Rectangle
-from sklearn.calibration import calibration_curve
+from matplotlib.patches import Rectangle
 
 from xcross.config import ROOT
 from xcross.model.evaluate import lift_by_decile
@@ -75,26 +73,6 @@ def table_comparison() -> None:
                           "brier_skill", "ece", "stability", "stability_temporal", "icc"] if c2 in c.columns]
     rows = [[_fmt(v) for v in r] for r in c.select(cols).iter_rows()]
     _save_table(cols, rows, "Comparison matrix (all runs)", "table_comparison.png")
-
-
-def chart_tradeoff() -> None:
-    c = pl.read_csv(METRICS / "comparison.csv")
-    fig, ax = plt.subplots(figsize=(8.5, 6.5))
-    for r in c.iter_rows(named=True):
-        ax.scatter(r["auc"], r["stability"], color=FEATURE_COLOR[r["feature_set"]],
-                   marker=ESTIMATOR_MARKER[r["estimator"]], s=110,
-                   alpha=0.5 if r["calibration"] == "sigmoid" else 1.0, edgecolor="black", linewidth=0.6)
-    ax.set_xlabel("AUC — per-cross discrimination (higher = better)")
-    ax.set_ylabel("Split-half stability — ranking reproducibility (higher = better)")
-    ax.set_title("Trade-off: discrimination × ranking stability (all runs)")
-    ax.grid(alpha=0.3)
-    legend = ([Patch(facecolor=FEATURE_COLOR[k], label=k) for k in FEATURE_COLOR]
-              + [Line2D([0], [0], marker=m, color="gray", linestyle="", label=e) for e, m in ESTIMATOR_MARKER.items()]
-              + [Line2D([0], [0], marker="o", color="black", linestyle="", label="isotonic"),
-                 Line2D([0], [0], marker="o", color="black", alpha=0.4, linestyle="", label="sigmoid")])
-    ax.legend(handles=legend, loc="upper right", fontsize=8, ncol=2)
-    fig.savefig(FIGURES / "chart_tradeoff.png", dpi=120, bbox_inches="tight")
-    plt.close(fig)
 
 
 # --- per label ---
@@ -322,27 +300,6 @@ def chart_importance(fs: str, label: str, top: int = 20) -> None:
     plt.close(fig)
 
 
-def chart_calibration_spread(fs: str, label: str) -> None:
-    preds = pl.read_csv(METRICS / "oof_predictions.csv")
-    prob = preds[f"prob_{fs}_{label}"].to_numpy()
-    y = preds[label].to_numpy()
-    fig, (ax_cal, ax_hist) = plt.subplots(1, 2, figsize=(11.5, 4.6))
-    frac, mean_pred = calibration_curve(y, prob, n_bins=10, strategy="quantile")
-    ax_cal.plot([0, 1], [0, 1], "k--", lw=0.8, label="perfect calibration")
-    ax_cal.plot(mean_pred, frac, "o-", color="#d62728")
-    ax_cal.set_xlabel("predicted probability")
-    ax_cal.set_ylabel("observed frequency")
-    ax_cal.set_title(f"Calibration — {fs}/{label}")
-    ax_cal.legend()
-    ax_hist.hist(prob, bins=30, color="#1f77b4")
-    ax_hist.set_xlabel("predicted probability")
-    ax_hist.set_ylabel("number of crosses")
-    ax_hist.set_title(f"Probability distribution — {fs}/{label}")
-    fig.tight_layout()
-    fig.savefig(FIGURES / f"calibration_{fs}_{label}.png", dpi=110)
-    plt.close(fig)
-
-
 def chart_lift(fs: str, label: str) -> None:
     preds = pl.read_csv(METRICS / "oof_predictions.csv")
     table = lift_by_decile(preds[label].to_numpy(), preds[f"prob_{fs}_{label}"].to_numpy())
@@ -370,7 +327,7 @@ def _safe(fn, *args) -> bool:
 def run() -> int:
     FIGURES.mkdir(parents=True, exist_ok=True)
     ok = total = 0
-    for fn in (table_model_metrics, table_comparison, chart_tradeoff):
+    for fn in (table_model_metrics, table_comparison):
         total += 1
         ok += _safe(fn)
     for label in LABELS:
@@ -381,7 +338,7 @@ def run() -> int:
             ok += _safe(fn, label)
     for fs in FEATURE_SETS:
         for label in LABELS:
-            for fn in (chart_importance, chart_calibration_spread, chart_lift):
+            for fn in (chart_importance, chart_lift):
                 total += 1
                 ok += _safe(fn, fs, label)
     logger.info(f"Figures written to {FIGURES} ({ok}/{total} ok)")

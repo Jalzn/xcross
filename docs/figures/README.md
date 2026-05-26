@@ -18,10 +18,10 @@ After re-running the report, refresh the embedded ones:
 
 ```bash
 uv run python -m xcross.model.report
-cp artifacts/reports/figures/chart_tradeoff.png docs/figures/
+cp artifacts/reports/figures/chart_model_tradeoff_{success,shot}.png docs/figures/
 cp artifacts/reports/figures/chart_ranking_top_{success,shot}.png docs/figures/
 cp artifacts/reports/figures/chart_ranking_quadrants_{success,shot}.png docs/figures/
-cp artifacts/reports/figures/calibration_{xcross,xcrossot}_success.png docs/figures/
+cp artifacts/reports/figures/chart_calibration_compare_{success,shot}.png docs/figures/
 cp artifacts/reports/figures/lift_{xcross,xcrossot}_success.png docs/figures/
 cp artifacts/reports/figures/chart_importance_{xcross,xcrossot}_success.png docs/figures/
 cp artifacts/reports/figures/chart_by_{league,position}_success.png docs/figures/
