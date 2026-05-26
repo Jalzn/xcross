@@ -94,7 +94,11 @@ def _pdp_figure(estimator: str, X: np.ndarray, y: np.ndarray, names: list[str], 
     """Partial-dependence grid of the FINAL model: how the predicted probability moves as
     each top feature varies (direction and shape of the effect, complementing the magnitude
     in chart_importance). Each panel shades the curve above/below the model's average
-    prediction, and a rug shows where the real crosses lie."""
+    prediction, and a rug shows where the real crosses lie. Skipped for TabPFN: the per-grid
+    predict over its 6k context is prohibitively expensive and unstable on L4."""
+    if estimator == "tabpfn":
+        logger.info(f"PDP skipped for {tag} (TabPFN): too expensive on L4")
+        return
     model = ESTIMATORS[estimator]().fit(X, y)
     top = np.argsort(_feature_importance(model, X, y))[::-1][:PDP_TOP]
     rng = np.random.default_rng(0)
