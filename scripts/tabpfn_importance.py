@@ -30,7 +30,10 @@ def run() -> int:
         logger.info(f"[tabpfn-importance] xcrossot/{label_clean}: building model ...")
         X, y, _, names = make_xy(df, "xcrossot", label_col)
         model = ESTIMATORS["tabpfn"]().fit(X, y)
-        logger.info(f"[tabpfn-importance] xcrossot/{label_clean}: running permutation ({N_REPEATS} reps × {len(names)} features × {MAX_SAMPLES} samples) ...")
+        logger.info(
+            f"[tabpfn-importance] xcrossot/{label_clean}: running permutation "
+            f"({N_REPEATS} reps × {len(names)} features × {MAX_SAMPLES} samples) ..."
+        )
         result = permutation_importance(
             model, X, y, scoring="roc_auc",
             n_repeats=N_REPEATS, max_samples=MAX_SAMPLES, random_state=0, n_jobs=1,
@@ -40,7 +43,10 @@ def run() -> int:
             "importance_std": result.importances_std,
         }).sort("importance", descending=True)
         out.write_csv(METRICS / f"importance_xcrossot_{label_clean}_tabpfn.csv")
-        logger.info(f"[tabpfn-importance] wrote importance_xcrossot_{label_clean}_tabpfn.csv; top5: {out.head(5)['feature'].to_list()}")
+        logger.info(
+            f"[tabpfn-importance] wrote importance_xcrossot_{label_clean}_tabpfn.csv; "
+            f"top5: {out.head(5)['feature'].to_list()}"
+        )
     return 0
 
 
