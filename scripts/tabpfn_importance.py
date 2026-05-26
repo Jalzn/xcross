@@ -9,14 +9,17 @@ the cost manageable.
 from __future__ import annotations
 
 import sys
+from pathlib import Path
 
-import polars as pl
-from loguru import logger
-from sklearn.inspection import permutation_importance
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from xcross.config import ROOT
-from xcross.model.dataset import load_features, make_xy
-from xcross.model.estimators import ESTIMATORS
+import polars as pl  # noqa: E402
+from loguru import logger  # noqa: E402
+from sklearn.inspection import permutation_importance  # noqa: E402
+
+from xcross.config import ROOT  # noqa: E402
+from xcross.model.dataset import load_features, make_xy  # noqa: E402
+from xcross.model.estimators import ESTIMATORS  # noqa: E402
 
 METRICS = ROOT / "artifacts" / "reports" / "metrics"
 TARGETS = (("success", "success"), ("shot_in_window", "shot"))
