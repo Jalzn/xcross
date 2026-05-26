@@ -129,8 +129,13 @@ def chart_importance_compare(label: str, top: int = 12) -> None:
     if not headline_csv.exists() or not tabpfn_csv.exists():
         logger.warning(f"importance_compare skipped for {label}: missing inputs")
         return
-    head = pl.read_csv(headline_csv).with_columns((pl.col("importance") / pl.col("importance").max()).alias("imp_norm"))
-    tab = pl.read_csv(tabpfn_csv).with_columns((pl.col("importance") / pl.col("importance").max()).alias("imp_norm"))
+    def _normalise(df: pl.DataFrame) -> pl.DataFrame:
+        df = df.with_columns(pl.col("importance").clip(lower_bound=0.0).alias("pos"))
+        max_pos = df["pos"].max() or 1.0
+        return df.with_columns((pl.col("pos") / max_pos).alias("imp_norm"))
+
+    head = _normalise(pl.read_csv(headline_csv))
+    tab = _normalise(pl.read_csv(tabpfn_csv))
     union = set(head.head(top)["feature"].to_list()) | set(tab.head(top)["feature"].to_list())
     head_map = dict(zip(head["feature"].to_list(), head["imp_norm"].to_list(), strict=True))
     tab_map = dict(zip(tab["feature"].to_list(), tab["imp_norm"].to_list(), strict=True))

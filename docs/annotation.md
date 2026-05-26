@@ -166,9 +166,14 @@ o TabPFN. *A correção dessa propagação é pendência se quisermos o TabPFN c
   **conjunto de top features é robusto** — reforça que a representação certa é o sinal,
   não o classificador.
 
-### Pendência menor: figura comparativa
-- Opcional: gerar `chart_importance_compare_xcrossot_success.png` mostrando TabPFN vs
-  catboost lado a lado, para ilustrar o achado de convergência+divergência acima.
+### Figura comparativa (DONE — 2026-05-26)
+- `chart_importance_compare_xcrossot_{success,shot}.png`. Normaliza pelo max do
+  *positivo* (clipa importâncias negativas a 0, que indicam ruído/feature inútil).
+- **Achado adicional revelado pela figura**: o TabPFN é mais **parcimonioso** — para
+  o xCrossOT/shot concentra a importância em ~2 features (`flight_pace_3d`,
+  `entropy_general_in_zone`), enquanto o adaboost dispersa em ~10. Foundation model
+  encontra um sinal mais condensado; o GBDT precisa de mais features porque cada árvore
+  é fraca.
 
 ### Para o paper
 - Rascunhar `docs/paper-outline.md` com a estrutura completa (já discutida).
