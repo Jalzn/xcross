@@ -1,16 +1,16 @@
 """CLI: train the matrix {xCross,xCrossOT} × {success,shot} × estimators × calibrations,
 score each on OOF probabilities, and write the comparison table (raw data only).
 
-TabPFN is scored in an isolated subprocess (see tabpfn_oof.py) and appended; pass
-`--no-tabpfn` to skip it. report.py reads this table to pick the best model per target
-(see selection.py) — it is not hardcoded. Figures are produced by figures.py / report.py.
+TabPFN joins the registry when `XCROSS_TABPFN=1` (typically on a GPU host — see
+`scripts/run_pipeline_lightning.py`); locally on macOS it stays out by default to avoid the
+OpenMP clash with xgboost/lightgbm. report.py reads this table to pick the best model per
+target (see selection.py) — not hardcoded. Figures come from figures.py / comparison_figures.py.
 
     uv run python -m xcross.model.compare
 """
 
 from __future__ import annotations
 
-import subprocess
 import sys
 
 import numpy as np
@@ -25,17 +25,6 @@ from xcross.model.train import oof_predict
 
 CALIBRATIONS = ("isotonic", "sigmoid")
 METRICS_DIR = ROOT / "artifacts" / "reports" / "metrics"
-TABPFN_CSV = METRICS_DIR / "comparison_tabpfn.csv"
-
-
-def _append_tabpfn(table: pl.DataFrame) -> pl.DataFrame:
-    """Run TabPFN in its own process (OpenMP clash with xgboost/lightgbm) and append it."""
-    logger.info("Running TabPFN in an isolated subprocess ...")
-    result = subprocess.run([sys.executable, "-m", "xcross.model.tabpfn_oof"])
-    if result.returncode != 0 or not TABPFN_CSV.exists():
-        logger.warning("TabPFN subprocess failed; comparison will omit it.")
-        return table
-    return pl.concat([table, pl.read_csv(TABPFN_CSV)], how="diagonal_relaxed")
 
 
 def run() -> int:
@@ -74,11 +63,8 @@ def run() -> int:
     pl.DataFrame(oof).write_parquet(METRICS_DIR / "oof_matrix.parquet")
     logger.info(f"Wrote oof_matrix.parquet ({len(oof) - 4} model columns).")
 
-    table = pl.DataFrame(rows)
-    if "tabpfn" not in ESTIMATORS and "--no-tabpfn" not in sys.argv:
-        table = _append_tabpfn(table)
-    table.write_csv(METRICS_DIR / "comparison.csv")
-    logger.info(f"Wrote comparison.csv ({table.height} rows).")
+    pl.DataFrame(rows).write_csv(METRICS_DIR / "comparison.csv")
+    logger.info(f"Wrote comparison.csv ({len(rows)} rows).")
     return 0
 
 

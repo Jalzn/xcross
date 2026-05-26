@@ -6,7 +6,7 @@ xCrossOT is the *danger* score, judged on discrimination (`auc`). Ties break by 
 
 The headline is restricted to estimators the report can retrain in-process (`eligible`):
 TabPFN appears in the comparison for benchmarking but is not a production candidate, since
-it only runs in an isolated process (see tabpfn_oof.py).
+it only joins the registry on a GPU host (`XCROSS_TABPFN=1`).
 """
 
 from __future__ import annotations

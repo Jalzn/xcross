@@ -14,10 +14,10 @@ does it **separate** crosses (discrimination)? and is the player ranking **repro
   of the delivery*.
 - Tabular estimators compared: **XGBoost**, **AdaBoost**, **CatBoost**, **LightGBM**,
   **HistGradientBoosting**, **RandomForest** (bagging) and **LogisticRegression** (the linear
-  floor). **TabPFN** (a pretrained tabular transformer) is also scored, but in an isolated
-  process (`tabpfn_oof.py`) — its PyTorch OpenMP runtime segfaults alongside xgboost/lightgbm on
-  macOS. TabPFN appears in the comparison as a benchmark but is **not eligible as the headline
-  model** (the report cannot retrain it in-process); the headline is chosen among the others.
+  floor). **TabPFN** (a pretrained tabular transformer) joins the registry only on a GPU host
+  (via `XCROSS_TABPFN=1`) — locally on macOS it stays out to avoid the OpenMP clash with
+  xgboost/lightgbm. TabPFN appears in the comparison as a benchmark but is **not eligible as the
+  headline model** (the headline is restricted to the in-process registry).
 - Calibration: **isotonic** or **sigmoid** (chosen by lowest ECE).
 - Validation: **5-fold out-of-fold**, `StratifiedGroupKFold` by match (the same match never
   appears in both train and test). Every metric is measured on the out-of-fold
