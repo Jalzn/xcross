@@ -1739,9 +1739,13 @@ dependencies = [
     { name = "polars" },
     { name = "scikit-learn" },
     { name = "scipy" },
-    { name = "tabpfn" },
     { name = "tqdm" },
     { name = "xgboost" },
+]
+
+[package.optional-dependencies]
+gpu = [
+    { name = "tabpfn" },
 ]
 
 [package.dev-dependencies]
@@ -1761,10 +1765,11 @@ requires-dist = [
     { name = "polars", specifier = ">=1.0" },
     { name = "scikit-learn", specifier = ">=1.8.0" },
     { name = "scipy", specifier = ">=1.13" },
-    { name = "tabpfn", specifier = ">=8.0.3" },
+    { name = "tabpfn", marker = "extra == 'gpu'", specifier = ">=8.0.3" },
     { name = "tqdm", specifier = ">=4.66" },
     { name = "xgboost", specifier = ">=3.2.0" },
 ]
+provides-extras = ["gpu"]
 
 [package.metadata.requires-dev]
 dev = [

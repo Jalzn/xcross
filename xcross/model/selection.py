@@ -40,7 +40,9 @@ def select_best(
     estimators the caller can instantiate (the report passes its in-process registry, excluding
     TabPFN)."""
     if by is None:
-        by = CRITERION.get(feature_set, "stability_temporal")
+        if feature_set not in CRITERION:
+            raise KeyError(f"no selection criterion for feature_set={feature_set!r}; add it to CRITERION")
+        by = CRITERION[feature_set]
     if comparison is None:
         logger.warning(f"comparison.csv missing; falling back to {FALLBACK} for {feature_set}/{label}")
         return dict(FALLBACK)
@@ -50,7 +52,6 @@ def select_best(
     if sub.height == 0:
         return dict(FALLBACK)
     if by not in sub.columns:
-        logger.warning(f"'{by}' not in comparison.csv; selecting by 'stability' for {feature_set}/{label}")
-        by = "stability"
+        raise KeyError(f"'{by}' not in comparison.csv columns for {feature_set}/{label}: {sub.columns}")
     best = sub.sort([by, "ece"], descending=[True, False]).row(0, named=True)
     return {"estimator": best["estimator"], "calibration": best["calibration"]}

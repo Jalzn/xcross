@@ -44,8 +44,6 @@ def _traj(rows):
     return np.array(rows, dtype=float)
 
 
-# --- occupancy / entropy ---
-
 def test_occupancy_grid_is_a_distribution():
     grid = occupancy_grid(np.array([[40.0, 5.0]]), np.zeros((1, 2)), HL, HW)
     assert grid.shape == (120, 80)
@@ -78,8 +76,6 @@ def test_spread_players_have_more_entropy_than_concentrated():
     assert entropy_map(spread).sum() > entropy_map(one).sum()
 
 
-# --- pitch control ---
-
 def test_pitch_control_in_unit_range():
     pc = pitch_control_map(
         np.array([[40.0, 0.0]]), np.zeros((1, 2)),
@@ -97,8 +93,6 @@ def test_pitch_control_favours_the_closer_team():
     assert pc[gx >= 45].mean() > 0.5  # attacker owns the area near goal
 
 
-# --- grid masks ---
-
 def test_box_mask_inside_outside():
     gx = np.array([50.0, 30.0, 50.0])
     gy = np.array([0.0, 0.0, 25.0])
@@ -112,8 +106,6 @@ def test_post_masks_split_by_flank():
     assert second_post_mask(gx, gy, HL).tolist() == [False, True]
 
 
-# --- event geometry ---
-
 def test_cross_region_byline_touchline():
     assert _cross_region(48.0, 30.0, HL) == "byline_touchline"
 
@@ -125,8 +117,6 @@ def test_event_distance_and_cross_angle():
     assert abs(dest["distance_from_end_line"] - 2.5) < 1e-9
     assert abs(dest["polar_angle_cross"] - np.arctan2(-10.0, 10.0)) < 1e-9
 
-
-# --- counts ---
 
 def test_counts_in_box_and_ratio():
     state = _state([[50, 0], [48, 10], [10, 0]], [[49, 0]])
@@ -142,8 +132,6 @@ def test_near_action_line_counts_perpendicular_distance():
     assert counts["attackers_near_action_line"] == 1  # only the one on the line (<5 m)
 
 
-# --- spatial aggregation ---
-
 def test_spatial_diff_is_attack_minus_defense():
     state = _state([[45, 5], [40, 0]], [[44, 0]])
     gx, gy = grid_centers(HL, HW)
@@ -153,8 +141,6 @@ def test_spatial_diff_is_attack_minus_defense():
     assert "entropy_general_grad_towards_goal" in feats
     assert "pitch_control_grad_towards_goal" in feats
 
-
-# --- crosser pressure ---
 
 def test_crosser_pressure_nearest_defender():
     state = _state_full([[40, 30]], [[42, 30], [10, 0]], crosser_pos=(40.0, 30.0))
@@ -169,16 +155,12 @@ def test_crosser_pressure_no_crosser_is_sentinel():
     assert p["pressure_crosser_def_within_3m"] == 0
 
 
-# --- marking tightness ---
-
 def test_marking_free_attacker_and_max_gap():
     state = _state_full([[50, 0], [50, 15]], [[50, 1], [50, 5]])
     m = marking_tightness(state, HL)
     assert m["marking_free_attackers_in_box"] == 1          # the one at y=15 is unmarked
     assert abs(m["marking_max_attacker_gap_in_box"] - 10.0) < 1e-9
 
-
-# --- largest empty pocket ---
 
 def test_pocket_radius_larger_with_sparse_defense():
     sparse = largest_empty_pocket(_state_full([[40, 0]], [[48, 0]]), HL, HW)
@@ -192,8 +174,6 @@ def test_goal_angle_central_greater_than_wide():
     assert goal_angle(48.0, 0.0, HL) > goal_angle(48.0, 25.0, HL)
 
 
-# --- coverage mismatch (KL) ---
-
 def test_coverage_kl_zero_when_densities_match():
     c = coverage_mismatch(_state_full([[50, 0]], [[50, 0]]), HL, HW)
     assert c["coverage_kl_attack_defense_in_box"] < 1e-6
@@ -203,8 +183,6 @@ def test_coverage_kl_positive_when_mismatched():
     c = coverage_mismatch(_state_full([[50, 15]], [[50, -15]]), HL, HW)
     assert c["coverage_kl_attack_defense_in_box"] > 0.1
 
-
-# --- goalkeeper ---
 
 def test_gk_distance_off_line_and_lateral_speed():
     g = goalkeeper_features((50.0, 1.0), (0.0, 2.0), (40.0, 30.0), HL)
@@ -219,8 +197,6 @@ def test_gk_absent_is_sentinel():
     assert g["gk_ball_distance"] == 100.0
 
 
-# --- defensive shape ---
-
 def test_shape_line_height_excludes_gk():
     state = _state_full([], [[40, 0], [48, 5], [44, -5], [52, 0]], gk_pos=(52.0, 0.0))
     s = defensive_shape(state, HL)
@@ -233,8 +209,6 @@ def test_shape_block_area_zero_with_two_defenders():
     s = defensive_shape(_state_full([], [[40, 0], [48, 5]], gk_pos=None), HL)
     assert s["shape_block_area"] == 0.0
 
-
-# --- ball flight ---
 
 def test_ball_trajectory_sorts_and_clips_negative_z():
     df = pl.DataFrame({"frame_num": [2, 1, 0], "x": [3.0, 2.0, 1.0], "y": [0.0, 0.0, 0.0], "z": [-0.3, 2.0, 0.0]})
@@ -257,8 +231,6 @@ def test_flight_bounce_count():
     assert flight_features(traj, 25.0)["flight_bounce_count"] == 2.0
 
 
-# --- vertical clearance ---
-
 def test_clearance_margins_over_defender_and_keeper():
     traj = _traj([[0, 30, 0, 2], [1, 40, 0, 3.0], [2, 50, 0, 4.0]])
     c = vertical_clearance(np.array([[40.0, 0.0]]), (50.0, 0.0), traj)
@@ -272,8 +244,6 @@ def test_clearance_sentinel_when_nobody_on_path():
     assert c["clearance_min_margin_over_defender"] == 10.0
     assert c["clearance_over_keeper"] == 10.0
 
-
-# --- swing ---
 
 def test_swing_cutback_detected_near_byline():
     row = {"start_x": 50.0, "start_y": 30.0, "end_x": 46.0, "end_y": 5.0}
@@ -289,16 +259,12 @@ def test_swing_curl_magnitude_is_abs_of_signed():
     assert abs(s["swing_inout"]) == s["swing_curl_magnitude"]
 
 
-# --- second-ball support ---
-
 def test_support_counts_in_ring_excludes_inner():
     state = _state_full([[50, 10], [50, 2]], [[50, 12]])
     sup = second_ball_support(state, (50.0, 0.0))
     assert sup["support_attackers_ring"] == 1   # (50,10) in ring, (50,2) inside inner
     assert sup["support_defenders_ring"] == 1
 
-
-# --- temporal deltas ---
 
 def test_defensive_collapse_counts_delta():
     start = _state([[50, 0]], [[49, 0]])                       # 1 attacker, 1 defender in box

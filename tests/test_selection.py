@@ -1,4 +1,5 @@
 import polars as pl
+import pytest
 
 from xcross.model.selection import select_best
 
@@ -39,10 +40,10 @@ def test_select_best_excludes_ineligible_estimators():
     assert choice["estimator"] == "adaboost"
 
 
-def test_select_best_falls_back_to_stability_when_temporal_missing():
+def test_select_best_raises_when_criterion_column_missing():
     comparison = _comparison().drop("stability_temporal")
-    choice = select_best(comparison, "xcross", "success")
-    assert choice["estimator"] in {"tabpfn", "adaboost"}
+    with pytest.raises(KeyError, match="stability_temporal"):
+        select_best(comparison, "xcross", "success")
 
 
 def test_select_best_falls_back_when_target_absent():

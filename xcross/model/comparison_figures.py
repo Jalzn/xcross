@@ -117,9 +117,9 @@ def chart_ranking_agreement(label: str) -> None:
 
 
 def chart_importance_compare(label: str, top: int = 12) -> None:
-    """Top features of the xCrossOT headline (catboost/adaboost) vs. TabPFN, normalised by
-    each model's own max — shows that families agree on the top set but TabPFN leans on
-    entropy signals while the GBDT headline leans on geometry/flight."""
+    """Top features of the xCrossOT headline vs. TabPFN, normalised by each model's own max —
+    shows that families agree on the top set but TabPFN leans on entropy signals while the
+    GBDT headline leans on geometry/flight."""
     headline_meta = pl.read_csv(METRICS / "model_metrics.csv").filter(
         pl.col("model") == f"xcrossot/{label}"
     ).row(0, named=True)

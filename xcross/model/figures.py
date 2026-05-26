@@ -21,6 +21,7 @@ import numpy as np
 import polars as pl
 from loguru import logger
 from matplotlib.patches import Rectangle
+from sklearn.calibration import calibration_curve
 
 from xcross.config import ROOT
 from xcross.model.evaluate import lift_by_decile
@@ -32,10 +33,6 @@ FIGURES = ROOT / "artifacts" / "reports" / "figures"
 LABELS = ("success", "shot")
 FEATURE_SETS = ("xcross", "xcrossot")
 FEATURE_COLOR = {"xcross": "#1f77b4", "xcrossot": "#d62728"}
-ESTIMATOR_MARKER = {
-    "xgboost": "o", "adaboost": "s", "catboost": "^", "lightgbm": "D",
-    "histgb": "v", "random_forest": "P", "logreg": "X", "tabpfn": "*",
-}
 
 
 def _fmt(value: object) -> str:
@@ -57,8 +54,6 @@ def _save_table(headers: list[str], rows: list[list[str]], title: str, name: str
     plt.close(fig)
 
 
-# --- shared (cover both labels already) ---
-
 def table_model_metrics() -> None:
     m = pl.read_csv(METRICS / "model_metrics.csv")
     models = m["model"].to_list()
@@ -74,8 +69,6 @@ def table_comparison() -> None:
     rows = [[_fmt(v) for v in r] for r in c.select(cols).iter_rows()]
     _save_table(cols, rows, "Comparison matrix (all runs)", "table_comparison.png")
 
-
-# --- per label ---
 
 def table_league_metrics(label: str) -> None:
     lg = pl.read_csv(METRICS / f"league_metrics_{label}.csv")
@@ -288,8 +281,6 @@ def chart_ablation(label: str) -> None:
     plt.close(fig)
 
 
-# --- per (feature_set, label) ---
-
 def chart_importance(fs: str, label: str, top: int = 20) -> None:
     s = pl.read_csv(METRICS / f"importance_{fs}_{label}.csv").head(top).reverse()
     fig, ax = plt.subplots(figsize=(8.5, 0.42 * top + 1.2))
@@ -315,6 +306,80 @@ def chart_lift(fs: str, label: str) -> None:
     plt.close(fig)
 
 
+def chart_calibration_final(label: str) -> None:
+    """Reliability curve of each selected final model (xCross | xCrossOT), with predicted-probability
+    histogram beneath — does each headline match the observed frequency across its score range?"""
+    preds = pl.read_csv(METRICS / "oof_predictions.csv")
+    y = preds[label].to_numpy()
+    fig, axes = plt.subplots(2, 2, figsize=(13, 8), gridspec_kw={"height_ratios": [3, 1]}, sharex="col")
+    for col, fs in enumerate(FEATURE_SETS):
+        prob = preds[f"prob_{fs}_{label}"].to_numpy()
+        frac, mean = calibration_curve(y, prob, n_bins=10, strategy="quantile")
+        axes[0, col].plot(mean, frac, "o-", color=FEATURE_COLOR[fs], lw=2, ms=6, label=f"{fs} (final)")
+        axes[0, col].plot([0, 1], [0, 1], "--", color="#444", lw=1)
+        axes[0, col].set_ylabel("observed frequency")
+        axes[0, col].set_title(f"{fs}/{label}")
+        axes[0, col].grid(alpha=0.3)
+        axes[0, col].legend(loc="upper left", fontsize=9)
+        axes[1, col].hist(prob, bins=30, color=FEATURE_COLOR[fs], alpha=0.7)
+        axes[1, col].set_xlabel("predicted probability")
+        axes[1, col].set_ylabel("crosses")
+        axes[1, col].grid(alpha=0.3)
+    fig.suptitle(f"Final-model calibration & histogram — {label}", fontweight="bold")
+    fig.tight_layout()
+    fig.savefig(FIGURES / f"chart_calibration_final_{label}.png", dpi=130, bbox_inches="tight")
+    plt.close(fig)
+
+
+def chart_score_distribution_final(label: str) -> None:
+    """OOF score distribution of each final model, split by the actual outcome — visualises
+    how much the model separates positives from negatives, complementing AUC with the shape."""
+    preds = pl.read_csv(METRICS / "oof_predictions.csv")
+    y = preds[label].to_numpy()
+    fig, axes = plt.subplots(1, 2, figsize=(13, 5), sharey=True)
+    bins = np.linspace(0, 1, 31)
+    for ax, fs in zip(axes, FEATURE_SETS, strict=True):
+        prob = preds[f"prob_{fs}_{label}"].to_numpy()
+        ax.hist(prob[y == 0], bins=bins, color="#bbbbbb", alpha=0.7,
+                label=f"{label}=0", edgecolor="white", linewidth=0.4)
+        ax.hist(prob[y == 1], bins=bins, color=FEATURE_COLOR[fs], alpha=0.65,
+                label=f"{label}=1", edgecolor="white", linewidth=0.4)
+        base = float(y.mean())
+        ax.axvline(base, color="black", ls=":", lw=1, label=f"base rate {base:.2f}")
+        ax.set_xlabel("predicted probability")
+        ax.set_title(f"{fs}/{label}")
+        ax.grid(alpha=0.3)
+        ax.legend(fontsize=9)
+    axes[0].set_ylabel("crosses")
+    fig.suptitle(f"Final-model score distribution by outcome — {label}", fontweight="bold")
+    fig.tight_layout()
+    fig.savefig(FIGURES / f"chart_score_distribution_final_{label}.png", dpi=130, bbox_inches="tight")
+    plt.close(fig)
+
+
+def chart_ranking_top_by_league_season(label: str, top: int = 12) -> None:
+    """Top N players within each (league, season) by xCross — generalisation check beyond
+    the global ranking: do separate cohorts each produce a sensible top list?"""
+    path = METRICS / f"ranking_by_league_season_{label}.csv"
+    if not path.exists():
+        return
+    r = pl.read_csv(path)
+    cohorts = sorted({(row["league"], row["season"]) for row in r.iter_rows(named=True)})
+    fig, axes = plt.subplots(1, len(cohorts), figsize=(4.5 * len(cohorts), 0.38 * top + 1.6),
+                             squeeze=False, sharex=True)
+    for ax, (lg, sn) in zip(axes[0], cohorts, strict=True):
+        sub = r.filter((pl.col("league") == lg) & (pl.col("season") == sn)).head(top).reverse()
+        err = 1.96 * sub["xcross_se"] if "xcross_se" in sub.columns else None
+        ax.barh(sub["nickname"], sub["xcross"], xerr=err, color=FEATURE_COLOR["xcross"], error_kw={"elinewidth": 0.7})
+        ax.set_title(f"{lg} {sn}\n({sub.height} shown)", fontsize=10)
+        ax.margins(y=0.01)
+    fig.suptitle(f"Top {top} crossers per league × season — {label}", fontweight="bold")
+    fig.text(0.5, 0.025, "mean xCross (95% CI)", ha="center", fontsize=10)
+    fig.tight_layout(rect=(0, 0.05, 1, 0.96))
+    fig.savefig(FIGURES / f"chart_ranking_top_by_league_season_{label}.png", dpi=120, bbox_inches="tight")
+    plt.close(fig)
+
+
 def _safe(fn, *args) -> bool:
     try:
         fn(*args)
@@ -333,7 +398,9 @@ def run() -> int:
     for label in LABELS:
         for fn in (table_league_metrics, chart_stability_vs_n, chart_ranking_top,
                    chart_ranking_quadrants, chart_ranking_quadrants_by_league,
-                   chart_by_position, chart_by_league, chart_reliability, chart_ablation):
+                   chart_ranking_top_by_league_season,
+                   chart_by_position, chart_by_league, chart_reliability, chart_ablation,
+                   chart_calibration_final, chart_score_distribution_final):
             total += 1
             ok += _safe(fn, label)
     for fs in FEATURE_SETS:

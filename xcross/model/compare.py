@@ -42,15 +42,15 @@ def run() -> int:
     }
     for feature_set in FEATURE_SETS:
         for label in LABEL_COLS:
+            label_name = "shot" if label == "shot_in_window" else label
             X, y, groups, _ = make_xy(df, feature_set, label)
             for name, factory in ESTIMATORS.items():
                 for calibration in CALIBRATIONS:
                     prob = oof_predict(factory, X, y, groups, calibration)
-                    label_name = "shot" if label == "shot_in_window" else label
                     oof[f"{name}__{feature_set}__{label_name}__{calibration}"] = prob
                     record = metrics(y, prob, player_ids, order_key)
                     rows.append({
-                        "feature_set": feature_set, "label": label,
+                        "feature_set": feature_set, "label": label_name,
                         "estimator": name, "calibration": calibration, **record,
                     })
                     logger.info(
