@@ -27,6 +27,3 @@ catboost_info/
 
 CLAUDE.md
 .claude/
-
-.lightning_upload/
-.lightning_bundle.tar.gz

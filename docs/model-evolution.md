@@ -255,8 +255,8 @@ signal at the moment of the cross, not the classifier*.
 - **Ranking-agreement modelo-vs-modelo** (Spearman heatmap) — does the player ranking depend on
   the estimator?
 - **TabPFN as a benchmark, not the production headline** — it segfaults alongside xgboost/lightgbm on
-  macOS (OpenMP clash), so it runs on a GPU studio (Lightning AI L4) and its results are merged into
-  the comparison; the headline stays on the in-process registry.
+  macOS (OpenMP clash), so it runs on a GPU host (with `XCROSS_TABPFN=1`) and its results are merged
+  into the comparison; the headline stays on the in-process registry.
 
 ### Results — headlines per target (out-of-fold, bootstrap 95% CI)
 
@@ -301,8 +301,8 @@ discrimination — calibration is reported, not optimised.
   (64 columns including TabPFN merged from the GPU run).
 - Bootstrap 500-resample CIs for AUC and 200-seed split-half for stability — both straight from the
   saved OOF predictions, no re-training (`robustness.py`).
-- TabPFN runs on Lightning AI L4 with `memory_saving_mode=True`, `torch.cuda.empty_cache()` between
-  folds, and `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True` — the L4's 22 GB VRAM is at its
-  limit with the ~6k context per fold.
+- TabPFN runs on a GPU host with `memory_saving_mode=True`, `torch.cuda.empty_cache()` between
+  folds, and `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True` — ~22 GB VRAM is at its limit with
+  the ~6k context per fold.
 - Figures and CSVs in `artifacts/reports/{metrics,figures}/`; comparison rig in
   `xcross/model/{compare,robustness,comparison_figures}.py`.

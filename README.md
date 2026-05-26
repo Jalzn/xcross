@@ -38,7 +38,7 @@ After [installing with `uv`](#install):
 Both are trained as the matrix `{xCross, xCrossOT} × {success, shot} × {8 estimators} ×
 {isotonic, sigmoid}` — the registry covers four families: linear (`logreg`), bagging
 (`random_forest`), gradient boosting (`xgboost`, `adaboost`, `catboost`, `lightgbm`, `histgb`)
-and a pretrained foundation model (`tabpfn`, run on a GPU studio and brought in as a benchmark).
+and a pretrained foundation model (`tabpfn`, run on a GPU host and brought in as a benchmark).
 Evaluation is on out-of-fold probabilities with `StratifiedGroupKFold` per match (the same match
 never appears in both train and test). The final report selects the headline per target by the
 metric that fits its job (xCross: temporal stability; xCrossOT: AUC), tie-broken by ECE; the

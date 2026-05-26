@@ -1,7 +1,6 @@
 """Permutation importance of the TabPFN on the two xCrossOT targets, so it can stand
-alongside the other headlines' importance. Runs on the studio (needs GPU); calibration
-is skipped (it is monotonic and does not change permutation importance over AUC) to keep
-the cost manageable.
+alongside the other headlines' importance. Needs a GPU host; calibration is skipped (it is
+monotonic and does not change permutation importance over AUC) to keep the cost manageable.
 
     XCROSS_TABPFN=1 XCROSS_TABPFN_DEVICE=cuda uv run python scripts/tabpfn_importance.py
 """
@@ -33,7 +32,7 @@ TABPFN_CKPT = "tabpfn-v2-classifier.ckpt"
 
 def _build_tabpfn():
     """Light-weight TabPFN for permutation importance: n_estimators=1 (no ensemble) and
-    memory_saving_mode (avoids OOM on the L4)."""
+    memory_saving_mode (avoids OOM on a single GPU)."""
     weights = hf_hub_download(TABPFN_REPO, TABPFN_CKPT)
     return TabPFNClassifier(
         model_path=weights, device="cuda", random_state=0,

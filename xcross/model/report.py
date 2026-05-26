@@ -95,9 +95,9 @@ def _pdp_figure(estimator: str, X: np.ndarray, y: np.ndarray, names: list[str], 
     each top feature varies (direction and shape of the effect, complementing the magnitude
     in chart_importance). Each panel shades the curve above/below the model's average
     prediction, and a rug shows where the real crosses lie. Skipped for TabPFN: the per-grid
-    predict over its 6k context is prohibitively expensive and unstable on L4."""
+    predict over its 6k context is prohibitively expensive on a single GPU."""
     if estimator == "tabpfn":
-        logger.info(f"PDP skipped for {tag} (TabPFN): too expensive on L4")
+        logger.info(f"PDP skipped for {tag} (TabPFN): too expensive on a single GPU")
         return
     model = ESTIMATORS[estimator]().fit(X, y)
     top = np.argsort(_feature_importance(model, X, y))[::-1][:PDP_TOP]

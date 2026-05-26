@@ -1,10 +1,10 @@
 """CLI: train the matrix {xCross,xCrossOT} × {success,shot} × estimators × calibrations,
 score each on OOF probabilities, and write the comparison table (raw data only).
 
-TabPFN joins the registry when `XCROSS_TABPFN=1` (typically on a GPU host — see
-`scripts/run_pipeline_lightning.py`); locally on macOS it stays out by default to avoid the
-OpenMP clash with xgboost/lightgbm. report.py reads this table to pick the best model per
-target (see selection.py) — not hardcoded. Figures come from figures.py / comparison_figures.py.
+TabPFN joins the registry when `XCROSS_TABPFN=1` (typically on a GPU host); locally on macOS it
+stays out by default to avoid the OpenMP clash with xgboost/lightgbm. report.py reads this table
+to pick the best model per target (see selection.py) — not hardcoded. Figures come from figures.py
+/ comparison_figures.py.
 
     uv run python -m xcross.model.compare
 """
