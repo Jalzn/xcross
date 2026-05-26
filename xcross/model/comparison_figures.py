@@ -116,6 +116,50 @@ def chart_ranking_agreement(label: str) -> None:
     plt.close(fig)
 
 
+def chart_importance_compare(label: str, top: int = 12) -> None:
+    """Top features of the xCrossOT headline (catboost/adaboost) vs. TabPFN, normalised by
+    each model's own max — shows that families agree on the top set but TabPFN leans on
+    entropy signals while the GBDT headline leans on geometry/flight."""
+    headline_meta = pl.read_csv(METRICS / "model_metrics.csv").filter(
+        pl.col("model") == f"xcrossot/{label}"
+    ).row(0, named=True)
+    headline_name = headline_meta["estimator"]
+    headline_csv = METRICS / f"importance_xcrossot_{label}.csv"
+    tabpfn_csv = METRICS / f"importance_xcrossot_{label}_tabpfn.csv"
+    if not headline_csv.exists() or not tabpfn_csv.exists():
+        logger.warning(f"importance_compare skipped for {label}: missing inputs")
+        return
+    head = pl.read_csv(headline_csv).with_columns((pl.col("importance") / pl.col("importance").max()).alias("imp_norm"))
+    tab = pl.read_csv(tabpfn_csv).with_columns((pl.col("importance") / pl.col("importance").max()).alias("imp_norm"))
+    union = set(head.head(top)["feature"].to_list()) | set(tab.head(top)["feature"].to_list())
+    head_map = dict(zip(head["feature"].to_list(), head["imp_norm"].to_list(), strict=True))
+    tab_map = dict(zip(tab["feature"].to_list(), tab["imp_norm"].to_list(), strict=True))
+    rows = sorted(
+        ((f, head_map.get(f, 0.0), tab_map.get(f, 0.0)) for f in union),
+        key=lambda r: max(r[1], r[2]), reverse=True,
+    )[:top]
+    features = [r[0] for r in rows]
+    head_vals = [r[1] for r in rows]
+    tab_vals = [r[2] for r in rows]
+
+    fig, ax = plt.subplots(figsize=(11, max(5, 0.42 * top + 1.5)))
+    y = np.arange(len(features))
+    h = 0.4
+    ax.barh(y - h / 2, head_vals, height=h, color=FAMILY_COLOR["boosting"],
+            edgecolor="black", linewidth=0.5, label=f"{headline_name} (headline)")
+    ax.barh(y + h / 2, tab_vals, height=h, color=FAMILY_COLOR["foundation"],
+            edgecolor="black", linewidth=0.5, label="TabPFN (foundation)")
+    ax.set_yticks(y, features, fontsize=9)
+    ax.invert_yaxis()
+    ax.set_xlabel("importance (normalised by each model's max)")
+    ax.set_title(f"Feature importance — xCrossOT/{label}: {headline_name} vs TabPFN", fontweight="bold")
+    ax.legend(loc="lower right", fontsize=9)
+    ax.grid(alpha=0.3, axis="x")
+    fig.tight_layout()
+    fig.savefig(FIGURES / f"chart_importance_compare_xcrossot_{label}.png", dpi=130, bbox_inches="tight")
+    plt.close(fig)
+
+
 def chart_calibration_compare(label: str) -> None:
     """Reliability curves of every model overlaid (one panel per feature set) — shows which
     models stay calibrated, a dimension the AUC trade-off hides."""
@@ -147,6 +191,7 @@ def run() -> int:
         chart_robustness(label)
         chart_ranking_agreement(label)
         chart_calibration_compare(label)
+        chart_importance_compare(label)
     logger.info("Wrote model-comparison figures.")
     return 0
 
