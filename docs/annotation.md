@@ -145,13 +145,18 @@ o TabPFN. *A correção dessa propagação é pendência se quisermos o TabPFN c
 
 ## 6. Pendências
 
-### Para o TabPFN como headline (próximo passo nesta sessão)
-- Rodar **só a `permutation_importance` do TabPFN** para os 2 alvos do xCrossOT
-  (sucess e shot), na cloud, num combo focado (~30 min L4). Saída:
-  `importance_xcrossot_{success,shot}_tabpfn.csv` (não sobrescrever o do catboost/adaboost).
+### Para o TabPFN como headline (BLOQUEADO)
+- **Bloqueio (2026-05-26):** créditos Lightning AI esgotados pelos runs anteriores —
+  `insufficient balance to start the cloud space`. O launch da permutation importance
+  do TabPFN falhou imediatamente.
+- Próximo passo (quando destravar): rodar `scripts/tabpfn_importance.py` na cloud
+  (`scripts/run_tabpfn_importance_lightning.py launch` + `collect`). Saídas:
+  `importance_xcrossot_{success,shot}_tabpfn.csv`.
+- Alternativas para destravar: aguardar reset mensal do free tier; top up; migrar para
+  Colab/Kaggle (T4/P100 grátis); aceitar TabPFN só como benchmark na §10.
 - Investigar a propagação de `XCROSS_TABPFN` no `nohup bash -lc` (hipóteses: bash não-
-  interativo herda `export`s antes do `nohup`; `lc` força login shell que pode resetar;
-  `env -i` em algum lugar). *Não bloqueia a §10*.
+  interativo herda `export`s antes do `nohup`; `lc` força login shell que pode resetar).
+  *Não bloqueia a §10 do paper*.
 
 ### Para o paper
 - Rascunhar `docs/paper-outline.md` com a estrutura completa (já discutida).
