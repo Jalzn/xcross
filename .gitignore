@@ -26,6 +26,7 @@ catboost_info/
 .DS_Store
 
 CLAUDE.md
+.claude/
 
 .lightning_upload/
 .lightning_bundle.tar.gz

@@ -15,7 +15,7 @@ and how the numbers moved — not code changes.
 | **Leakage-free validation & scale** | out-of-fold grouped by match, nested calibration, three leagues, and the first proof the ranking reproduces | 0.57 | 0.76 | 0.78 | ECE < 0.01 |
 | **Feature expansion** *(2026-05)* | add spatial-configuration, ball-flight (`z`) and temporal features | 0.57 | 0.78 | 0.81 | ECE < 0.01 |
 | **Dataset expansion** *(2026-05)* | 7,510 → 11,677 crosses across four competitions (+ Premier League 2023-24, + Champions League 2023-24); xCrossOT/success → CatBoost | 0.58 | 0.73 | **0.84** | ECE < 0.01 |
-| **Model comparison & TabPFN ceiling** *(current, 2026-05)* | expand registry to 8 estimators (linear → boosting → foundation); per-objective selection (xCross: stability_temporal; xCrossOT: AUC); bootstrap 95% CIs; TabPFN as benchmark — *no model unlocks xCross reproducibility* | 0.58 (TabPFN 0.59) | **0.62** | 0.84 (TabPFN 0.85) | ECE ≤ 0.013 |
+| **Model comparison & TabPFN ceiling** *(current, 2026-05)* | expand registry to 8 estimators (linear → boosting → foundation); per-objective selection (xCross: stability_temporal; xCrossOT: AUC); bootstrap 95% CIs; TabPFN as benchmark — *no model unlocks xCross reproducibility* | 0.58 (TabPFN 0.59) | **0.66** | 0.84 (TabPFN 0.85) | ECE ≤ 0.033 |
 
 \* The earliest AUCs were measured on a smaller, single-league dataset with a single train/test split
 (and match leakage), so they are **not** directly comparable to the later numbers — the xCross drop
@@ -258,40 +258,42 @@ signal at the moment of the cross, not the classifier*.
   macOS (OpenMP clash), so it runs on a GPU studio (Lightning AI L4) and its results are merged into
   the comparison; the headline stays on the in-process registry.
 
-### Results — headlines per target (out-of-fold, isotonic, bootstrap 95% CI)
+### Results — headlines per target (out-of-fold, bootstrap 95% CI)
 
-| Target | Headline | AUC | stability | ECE | TabPFN AUC *(benchmark)* |
+| Target | Headline | AUC | stability_temporal | ECE | TabPFN AUC *(benchmark)* |
 |---|---|---|---|---|---|
-| xCross / success | **adaboost** | 0.575 [0.564, 0.584] | **0.700** [0.636, 0.749] | 0.011 | 0.587 [0.576, 0.597] |
-| xCross / shot | adaboost | 0.582 | 0.717 | 0.007 | 0.590 |
-| xCrossOT / success | **catboost** | 0.838 [0.831, 0.846] | 0.354 | **0.005** | **0.849** [0.842, 0.856] |
-| xCrossOT / shot | adaboost | 0.727 | 0.416 | 0.011 | **0.778** |
+| xCross / success | **adaboost** / sigmoid | 0.578 [0.567, 0.587] | **0.656** [0.583, 0.715] | 0.013 | 0.587 [0.576, 0.597] |
+| xCross / shot | **adaboost** / sigmoid | 0.582 [0.570, 0.592] | 0.662 [0.587, 0.722] | 0.007 | 0.589 |
+| xCrossOT / success | **xgboost** / sigmoid | **0.844** [0.838, 0.851] | 0.178 | 0.033 | **0.849** [0.842, 0.856] |
+| xCrossOT / shot | **histgb** / sigmoid | **0.770** [0.761, 0.779] | 0.258 | 0.016 | **0.778** [0.769, 0.787] |
 
-xCrossOT/success moved AdaBoost → **CatBoost**: identical-within-IC AUC against the top GBDTs and the
-**best ECE** (0.005 vs xgboost 0.010, TabPFN 0.008) — robustness reveals what AUC alone hides.
+xCrossOT moved off AdaBoost: **xgboost** wins `success` on AUC (0.844, +0.006 over catboost), and
+**histgb** wins `shot` (0.770, +0.043 over the previous adaboost) — boosting closes the gap to
+TabPFN to ~0.005-0.008 AUC. The trade-off shows up: sigmoid-calibrated xgboost is less calibrated
+than catboost/isotonic on `success` (ECE 0.033 vs 0.007), but the selector judges xCrossOT on
+discrimination — calibration is reported, not optimised.
 
 ### What the numbers say
 
 - **The trade-off is structural** (`chart_model_tradeoff_*`) — *no single model wins both axes*.
-  Bagging/AdaBoost lead on reproducibility, boosting+foundation lead on discrimination. The
+  Bagging/AdaBoost lead on reproducibility, boosting + foundation lead on discrimination. The
   per-objective selection is not arbitrary, it is the only honest choice.
-- **The xCross stability gap is statistically significant** (`chart_model_robustness_*`) — adaboost's
-  IC `[0.636, 0.749]` is **disjoint** from xgboost's `[0.390, 0.541]`. Bagging/AdaBoost *really are*
-  the right family for creation, with evidence.
+- **The xCross temporal-stability gap is statistically significant**
+  (`chart_model_robustness_*`) — adaboost's CI `[0.583, 0.715]` is **disjoint** from xgboost's
+  `[0.390, 0.541]`. Bagging/AdaBoost *really are* the right family for creation, with evidence.
 - **The player ranking is robust to the model choice** (`chart_ranking_agreement_*`) — Spearman
   0.84-0.99 between every pair of estimators. The ranking is a property of the **data**.
 - **TabPFN is the AUC ceiling in both views** (xCross 0.587, xCrossOT 0.849), **but its xCross
-  stability stays where the GBDT family is** (0.651 — below adaboost's 0.700). **The foundation
-  model does not unlock xCross reproducibility** — confirming, with the strongest tabular model
-  available, that *the ceiling on creation is the signal at the moment of the cross, not the
-  classifier*. This is the centerpiece justification of the whole project.
+  temporal stability stays where the GBDT family is** (~0.57 — below adaboost's 0.66). **The
+  foundation model does not unlock xCross reproducibility** — confirming, with the strongest
+  tabular model available, that *the ceiling on creation is the signal at the moment of the
+  cross, not the classifier*. This is the centerpiece justification of the whole project.
 - **Foundation vs GBDT — convergence + divergence on what they "see"**
-  (`chart_importance_compare_xcrossot_*`): both rank `entropy_attack_in_zone` and `flight_pace_3d`
-  at the top, but **TabPFN leans on multiple entropy views** (attack, defense, general in zone)
-  while **catboost leans on geometry and flight physics** (`end_y`, `distance_from_end_line`,
-  `swing_inout`, `flight_loftiness`). Different windows on the same signal — and the foundation
-  model is **markedly more parsimonious** (on xCrossOT/shot it concentrates importance in ~2
-  features vs ~10 for adaboost).
+  (`chart_importance_compare_xcrossot_*`): both rank `entropy_attack_in_zone` at the top, but
+  **TabPFN leans on multiple entropy views** (attack, defense, general in zone) while the GBDT
+  headline (xgboost) leans on **geometry and flight physics** (`clearance_over_keeper`, `end_y`,
+  `pitch_control_in_zone`, `temporal_entropy_diff_zone_delta`). Different windows on the same
+  signal.
 
 ### How it was evaluated
 

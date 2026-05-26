@@ -119,6 +119,11 @@ both labels already and have no suffix: `table_model_metrics`, `table_comparison
   each pair of estimators.
 - `chart_calibration_compare_{label}.png` — reliability curves of every model overlaid (one
   panel per feature set).
+- `chart_calibration_final_{label}.png` — reliability curve of each **selected final model**
+  (xCross | xCrossOT), with the predicted-probability histogram beneath each curve.
+- `chart_score_distribution_final_{label}.png` — OOF score distribution of each final model,
+  **split by the actual outcome** (label=0 vs label=1). Visualises the separation between
+  positives and negatives — discrimination as a shape, complementing the AUC number.
 - `chart_importance_compare_xcrossot_{label}.png` — top features of the xCrossOT headline vs.
   TabPFN, normalised by each model's own max (shows convergence on the top + family-specific
   divergence on the tail).
@@ -130,6 +135,9 @@ both labels already and have no suffix: `table_model_metrics`, `table_comparison
 - `chart_ranking_quadrants_by_league_{label}.png` — the same quadrant view **per league** (one panel
   each), with quadrants split by **that league's own medians**. Only leagues with at least 6 qualified
   players (≥20 crosses) are shown.
+- `chart_ranking_top_by_league_season_{label}.png` — top N crossers within each
+  **(league, season)** cohort by xCross, with 95% CIs. Cohorts with fewer than 6 qualified
+  players are skipped (e.g. Bundesliga 2025-2026, Champions League 2023-2024).
 - `chart_by_position_{label}.png` — distribution of xCross by position group (validates the ranking).
 - `chart_by_league_{label}.png` — metrics per league, one panel per feature set (xCross | xCrossOT).
 - `chart_reliability_{label}.png` — **raw rate vs xCross vs xCrossOT** on random/temporal stability and

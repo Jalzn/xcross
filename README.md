@@ -87,9 +87,10 @@ and show *where* each acts:
 For **xCross**, **far-post attacking-shape entropy** (`entropy_attack_in_second_post`) is the single
 strongest feature, ahead of central-box attacking entropy (`entropy_attack_in_center_box`), with
 goalkeeper geometry (`gk_lateral_speed`, `gk_ball_distance`) contributing. For **xCrossOT** the
-arrival-zone entropy (`entropy_attack_in_zone`) leads, with the arrival location (`end_y`), the cross's
-**3D pace** (`flight_pace_3d`) and **whether the ball clears the keeper** (`clearance_over_keeper`) all in
-the top five — the ball's `z`, previously unused, is now front-line signal.
+arrival-zone entropy (`entropy_attack_in_zone`) leads, with **whether the ball clears the keeper**
+(`clearance_over_keeper`), the arrival location (`end_y`) and the **pitch control at the landing
+zone** (`pitch_control_in_zone`) all in the top five — the ball's `z`, previously unused, is now
+front-line signal.
 
 ## Results
 
@@ -101,18 +102,19 @@ Everything below is measured on **≈11,700 crosses from 1,183 matches** across 
 (Brasileirão 2023, Premier League 2023–24 and 2024–25, Champions League 2023–24, Bundesliga
 2025–26), on out-of-fold probabilities.
 
-**Final models** (AdaBoost for three targets, CatBoost for xCrossOT `success`; full metric
-definitions in [`docs/metrics.md`](docs/metrics.md)):
+**Final models** (AdaBoost for the xCross targets, XGBoost for xCrossOT `success`, HistGB for
+xCrossOT `shot`; selected per-objective from the comparison table — full metric definitions in
+[`docs/metrics.md`](docs/metrics.md)):
 
 | Model | Target | AUC | ECE | Stability | ICC |
 |---|---|---|---|---|---|
 | xCross | `success` | 0.58 | 0.013 | **0.73** | 0.13 |
 | xCross | `shot` | 0.58 | 0.007 | 0.72 | 0.14 |
-| xCrossOT | `success` | **0.84** | 0.007 | 0.35 | 0.02 |
-| xCrossOT | `shot` | 0.73 | 0.011 | 0.42 | 0.04 |
+| xCrossOT | `success` | **0.84** | 0.033 | 0.29 | 0.02 |
+| xCrossOT | `shot` | **0.77** | 0.016 | 0.26 | 0.03 |
 
 xCrossOT discriminates best (AUC up to 0.84) while xCross gives the more reproducible ranking
-(stability 0.73 vs 0.35) — the core trade-off charted below.
+(stability 0.73 vs 0.29) — the core trade-off charted below.
 
 **Are the probabilities calibrated?** Both models track the diagonal across the range and ECE
 stays under 0.01:
