@@ -14,10 +14,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import polars as pl  # noqa: E402
+from huggingface_hub import hf_hub_download  # noqa: E402
 from loguru import logger  # noqa: E402
 from sklearn.inspection import permutation_importance  # noqa: E402
-
-from huggingface_hub import hf_hub_download  # noqa: E402
 from tabpfn import TabPFNClassifier  # noqa: E402
 
 from xcross.config import ROOT  # noqa: E402
