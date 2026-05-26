@@ -17,22 +17,37 @@ import polars as pl  # noqa: E402
 from loguru import logger  # noqa: E402
 from sklearn.inspection import permutation_importance  # noqa: E402
 
+from huggingface_hub import hf_hub_download  # noqa: E402
+from tabpfn import TabPFNClassifier  # noqa: E402
+
 from xcross.config import ROOT  # noqa: E402
 from xcross.model.dataset import load_features, make_xy  # noqa: E402
-from xcross.model.estimators import ESTIMATORS  # noqa: E402
 
 METRICS = ROOT / "artifacts" / "reports" / "metrics"
 TARGETS = (("success", "success"), ("shot_in_window", "shot"))
-N_REPEATS = 5
-MAX_SAMPLES = 2000
+N_REPEATS = 3
+MAX_SAMPLES = 500
+N_ESTIMATORS = 1
+TABPFN_REPO = "Prior-Labs/TabPFN-v2-clf"
+TABPFN_CKPT = "tabpfn-v2-classifier.ckpt"
+
+
+def _build_tabpfn():
+    """Light-weight TabPFN for permutation importance: n_estimators=1 (no ensemble) and
+    memory_saving_mode (avoids OOM on the L4)."""
+    weights = hf_hub_download(TABPFN_REPO, TABPFN_CKPT)
+    return TabPFNClassifier(
+        model_path=weights, device="cuda", random_state=0,
+        ignore_pretraining_limits=True, memory_saving_mode=True, n_estimators=N_ESTIMATORS,
+    )
 
 
 def run() -> int:
     df = load_features()
     for label_col, label_clean in TARGETS:
-        logger.info(f"[tabpfn-importance] xcrossot/{label_clean}: building model ...")
+        logger.info(f"[tabpfn-importance] xcrossot/{label_clean}: building model (n_estimators={N_ESTIMATORS}) ...")
         X, y, _, names = make_xy(df, "xcrossot", label_col)
-        model = ESTIMATORS["tabpfn"]().fit(X, y)
+        model = _build_tabpfn().fit(X, y)
         logger.info(
             f"[tabpfn-importance] xcrossot/{label_clean}: running permutation "
             f"({N_REPEATS} reps × {len(names)} features × {MAX_SAMPLES} samples) ..."
