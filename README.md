@@ -35,13 +35,17 @@ After [installing with `uv`](#install):
 - **xCrossOT** — adds the **ball's destination** (where it arrived). Measures the *danger
   of the delivery*.
 
-Both are trained as the matrix `{xCross, xCrossOT} × {success, shot} × {XGBoost, AdaBoost,
-CatBoost} × {isotonic, sigmoid}`, evaluated on out-of-fold probabilities with
-`StratifiedGroupKFold` per match (the same match never appears in both train and test).
-The final report selects the best model per target from the comparison table
-([`comparison.csv`](artifacts/reports/metrics/comparison.csv), rendered as
-[`table_comparison.png`](artifacts/reports/figures/table_comparison.png)) — it is not
-hardcoded.
+Both are trained as the matrix `{xCross, xCrossOT} × {success, shot} × {8 estimators} ×
+{isotonic, sigmoid}` — the registry covers four families: linear (`logreg`), bagging
+(`random_forest`), gradient boosting (`xgboost`, `adaboost`, `catboost`, `lightgbm`, `histgb`)
+and a pretrained foundation model (`tabpfn`, run on a GPU studio and brought in as a benchmark).
+Evaluation is on out-of-fold probabilities with `StratifiedGroupKFold` per match (the same match
+never appears in both train and test). The final report selects the headline per target by the
+metric that fits its job (xCross: temporal stability; xCrossOT: AUC), tie-broken by ECE; the
+choice is not hardcoded — it comes from the comparison table
+([`comparison.csv`](artifacts/reports/metrics/comparison.csv) /
+[`table_comparison.png`](artifacts/reports/figures/table_comparison.png)) restricted to the
+in-process registry (TabPFN appears as the benchmark ceiling, never as the production headline).
 
 ## How it works
 
@@ -113,9 +117,7 @@ xCrossOT discriminates best (AUC up to 0.84) while xCross gives the more reprodu
 **Are the probabilities calibrated?** Both models track the diagonal across the range and ECE
 stays under 0.01:
 
-| xCross | xCrossOT |
-|---|---|
-| ![Calibration, xCross success](docs/figures/calibration_xcross_success.png) | ![Calibration, xCrossOT success](docs/figures/calibration_xcrossot_success.png) |
+![Reliability curves — all estimators, xCross and xCrossOT](docs/figures/chart_calibration_compare_success.png)
 
 **And do they order crosses?** The complementary view — the actual success rate per
 predicted-probability decile. The black line (mean predicted) hugging the bars re-confirms the
@@ -152,7 +154,7 @@ successful shot (`success`); right, crosses that end in any shot (`shot`):
 
 **The core trade-off — no model is both highly discriminative and highly reproducible:**
 
-![Discrimination vs stability](docs/figures/chart_tradeoff.png)
+![Discrimination vs reproducibility — by model family, xCross & xCrossOT](docs/figures/chart_model_tradeoff_success.png)
 
 **Generalisation — does it hold across leagues and positions?** Metrics are stable
 league-to-league (Brasileirão, Premier League, Champions League), and the per-position xCross
