@@ -82,7 +82,12 @@ def player_discrimination(
     return float(means["m"].std())
 
 
-def metrics(y_true: np.ndarray, prob: np.ndarray, player_ids: np.ndarray | None = None) -> dict[str, float]:
+def metrics(
+    y_true: np.ndarray,
+    prob: np.ndarray,
+    player_ids: np.ndarray | None = None,
+    order_key: np.ndarray | None = None,
+) -> dict[str, float]:
     slope, intercept = calibration_slope_intercept(y_true, prob)
     out = {
         "auc": float(roc_auc_score(y_true, prob)),
@@ -99,6 +104,9 @@ def metrics(y_true: np.ndarray, prob: np.ndarray, player_ids: np.ndarray | None 
         out["player_discrimination"] = player_discrimination(player_ids, prob)
         out["stability"] = split_half_stability(player_ids, prob)
         out["icc"] = icc(player_ids, prob)
+        if order_key is not None:
+            out["stability_temporal"] = temporal_split_stability(player_ids, prob, order_key)
+            out["topk_overlap_temporal"] = topk_overlap_temporal(player_ids, prob, order_key)
     return out
 
 
@@ -239,3 +247,29 @@ def temporal_split_stability(
     if len(early) < 3:
         return float("nan")
     return float(spearmanr(early, late).statistic)
+
+
+def topk_overlap_temporal(
+    player_ids: np.ndarray, prob: np.ndarray, order_key: np.ndarray,
+    k: int = 15, min_crosses: int = RANKING_MIN_CROSSES,
+) -> float:
+    """Fraction of the top-`k` players that persist between the early and late (chronological)
+    halves of their crosses. Complements `temporal_split_stability` (a global rank correlation)
+    by asking whether the *podium itself* reproduces, not just the overall ordering."""
+    frame = pl.DataFrame({"player_id": player_ids, "prob": prob, "order_key": order_key}).sort("order_key")
+    players, early, late = [], [], []
+    for (pid,), group in frame.group_by("player_id", maintain_order=True):
+        values = group["prob"].to_numpy()
+        if len(values) < min_crosses:
+            continue
+        cut = len(values) // 2
+        players.append(pid)
+        early.append(values[:cut].mean())
+        late.append(values[cut:].mean())
+    if len(players) < 3:
+        return float("nan")
+    players = np.array(players)
+    k_eff = min(k, len(players))
+    top_early = set(players[np.argsort(early)[::-1][:k_eff]])
+    top_late = set(players[np.argsort(late)[::-1][:k_eff]])
+    return len(top_early & top_late) / k_eff

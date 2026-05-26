@@ -14,7 +14,8 @@ and how the numbers moved — not code changes.
 | **Spatial-situation scoring** | score the cross's spatial configuration — positional entropy + pitch control — instead of its raw outcome; two views, xCross (creation) and xCrossOT (danger) | 0.62\* | not measured | 0.74\* | breaks above ~0.7 |
 | **Leakage-free validation & scale** | out-of-fold grouped by match, nested calibration, three leagues, and the first proof the ranking reproduces | 0.57 | 0.76 | 0.78 | ECE < 0.01 |
 | **Feature expansion** *(2026-05)* | add spatial-configuration, ball-flight (`z`) and temporal features | 0.57 | 0.78 | 0.81 | ECE < 0.01 |
-| **Dataset expansion** *(current, 2026-05)* | 7,510 → 11,677 crosses across four competitions (+ Premier League 2023-24, + Champions League 2023-24); xCrossOT/success → CatBoost | 0.58 | 0.73 | **0.84** | ECE < 0.01 |
+| **Dataset expansion** *(2026-05)* | 7,510 → 11,677 crosses across four competitions (+ Premier League 2023-24, + Champions League 2023-24); xCrossOT/success → CatBoost | 0.58 | 0.73 | **0.84** | ECE < 0.01 |
+| **Model comparison & TabPFN ceiling** *(current, 2026-05)* | expand registry to 8 estimators (linear → boosting → foundation); per-objective selection (xCross: stability_temporal; xCrossOT: AUC); bootstrap 95% CIs; TabPFN as benchmark — *no model unlocks xCross reproducibility* | 0.58 (TabPFN 0.59) | **0.66** | 0.84 (TabPFN 0.85) | ECE ≤ 0.033 |
 
 \* The earliest AUCs were measured on a smaller, single-league dataset with a single train/test split
 (and match leakage), so they are **not** directly comparable to the later numbers — the xCross drop
@@ -232,3 +233,76 @@ stability — the ranking objective).
 A bug surfaced by the multi-competition data was fixed: `player_discrimination` crashed on a competition
 where no player reached the 20-cross cut-off (knockout ties); it now returns `nan`, like the other
 ranking metrics.
+
+## 6 · Model comparison & TabPFN ceiling (current)
+
+Same xCross/xCrossOT representation, but the **model-selection question** is opened wide: how do we
+know we are choosing the right estimator? This step expands the registry, adds **bootstrap confidence
+intervals**, decides each headline by the metric that fits its job, and brings in a pretrained
+tabular foundation model (**TabPFN**) as the ceiling — to test whether *the limit on xCross is the
+signal at the moment of the cross, not the classifier*.
+
+### What changed (model level)
+
+- **Registry: 3 → 8 estimators**, four families — linear (`logreg`), bagging (`random_forest`),
+  gradient boosting (`xgboost`, `adaboost`, `catboost`, `lightgbm`, `histgb`), foundation (`tabpfn`).
+- **Ruler extended** — temporal split-half (`stability_temporal`) and top-15 podium overlap
+  (`topk_overlap_temporal`) added to the comparison; **bootstrap 95% CIs** for AUC and stability,
+  computed from the saved OOF predictions (`robustness.csv`) — no re-training.
+- **Per-objective selection** (`selection.py:CRITERION`) — xCross picks the headline by
+  `stability_temporal` (reproducibility is the goal of *creation*); xCrossOT by `AUC` (discrimination
+  is the goal of *danger*). Calibration breaks ties.
+- **Ranking-agreement modelo-vs-modelo** (Spearman heatmap) — does the player ranking depend on
+  the estimator?
+- **TabPFN as a benchmark, not the production headline** — it segfaults alongside xgboost/lightgbm on
+  macOS (OpenMP clash), so it runs on a GPU host (with `XCROSS_TABPFN=1`) and its results are merged
+  into the comparison; the headline stays on the in-process registry.
+
+### Results — headlines per target (out-of-fold, bootstrap 95% CI)
+
+| Target | Headline | AUC | stability_temporal | ECE | TabPFN AUC *(benchmark)* |
+|---|---|---|---|---|---|
+| xCross / success | **adaboost** / sigmoid | 0.578 [0.567, 0.587] | **0.656** [0.583, 0.715] | 0.013 | 0.587 [0.576, 0.597] |
+| xCross / shot | **adaboost** / sigmoid | 0.582 [0.570, 0.592] | 0.662 [0.587, 0.722] | 0.007 | 0.589 |
+| xCrossOT / success | **xgboost** / sigmoid | **0.844** [0.838, 0.851] | 0.178 | 0.033 | **0.849** [0.842, 0.856] |
+| xCrossOT / shot | **histgb** / sigmoid | **0.770** [0.761, 0.779] | 0.258 | 0.016 | **0.778** [0.769, 0.787] |
+
+xCrossOT moved off AdaBoost: **xgboost** wins `success` on AUC (0.844, +0.006 over catboost), and
+**histgb** wins `shot` (0.770, +0.043 over the previous adaboost) — boosting closes the gap to
+TabPFN to ~0.005-0.008 AUC. The trade-off shows up: sigmoid-calibrated xgboost is less calibrated
+than catboost/isotonic on `success` (ECE 0.033 vs 0.007), but the selector judges xCrossOT on
+discrimination — calibration is reported, not optimised.
+
+### What the numbers say
+
+- **The trade-off is structural** (`chart_model_tradeoff_*`) — *no single model wins both axes*.
+  Bagging/AdaBoost lead on reproducibility, boosting + foundation lead on discrimination. The
+  per-objective selection is not arbitrary, it is the only honest choice.
+- **The xCross temporal-stability gap is statistically significant**
+  (`chart_model_robustness_*`) — adaboost's CI `[0.583, 0.715]` is **disjoint** from xgboost's
+  `[0.390, 0.541]`. Bagging/AdaBoost *really are* the right family for creation, with evidence.
+- **The player ranking is robust to the model choice** (`chart_ranking_agreement_*`) — Spearman
+  0.84-0.99 between every pair of estimators. The ranking is a property of the **data**.
+- **TabPFN is the AUC ceiling in both views** (xCross 0.587, xCrossOT 0.849), **but its xCross
+  temporal stability stays where the GBDT family is** (~0.57 — below adaboost's 0.66). **The
+  foundation model does not unlock xCross reproducibility** — confirming, with the strongest
+  tabular model available, that *the ceiling on creation is the signal at the moment of the
+  cross, not the classifier*. This is the centerpiece justification of the whole project.
+- **Foundation vs GBDT — convergence + divergence on what they "see"**
+  (`chart_importance_compare_xcrossot_*`): both rank `entropy_attack_in_zone` at the top, but
+  **TabPFN leans on multiple entropy views** (attack, defense, general in zone) while the GBDT
+  headline (xgboost) leans on **geometry and flight physics** (`clearance_over_keeper`, `end_y`,
+  `pitch_control_in_zone`, `temporal_entropy_diff_zone_delta`). Different windows on the same
+  signal.
+
+### How it was evaluated
+
+- 56 in-process OOF runs (7 estimators × 2 fs × 2 labels × 2 calibrations) → `oof_matrix.parquet`
+  (64 columns including TabPFN merged from the GPU run).
+- Bootstrap 500-resample CIs for AUC and 200-seed split-half for stability — both straight from the
+  saved OOF predictions, no re-training (`robustness.py`).
+- TabPFN runs on a GPU host with `memory_saving_mode=True`, `torch.cuda.empty_cache()` between
+  folds, and `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True` — ~22 GB VRAM is at its limit with
+  the ~6k context per fold.
+- Figures and CSVs in `artifacts/reports/{metrics,figures}/`; comparison rig in
+  `xcross/model/{compare,robustness,comparison_figures}.py`.

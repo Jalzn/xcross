@@ -18,6 +18,17 @@ N_SPLITS = 5
 SEED = 0
 
 
+def _free_gpu() -> None:
+    """Release the CUDA cache between folds; TabPFN otherwise accumulates VRAM until OOM.
+    No-op when torch is absent (the gradient-boosting registry never imports it)."""
+    try:
+        import torch
+    except ImportError:
+        return
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
+
 def oof_predict(
     estimator_factory: Callable[[], ClassifierMixin],
     X: np.ndarray,
@@ -32,4 +43,6 @@ def oof_predict(
         model = CalibratedClassifierCV(estimator_factory(), method=method, cv=3)
         model.fit(X[train_idx], y[train_idx])
         oof[val_idx] = model.predict_proba(X[val_idx])[:, 1]
+        del model
+        _free_gpu()
     return oof

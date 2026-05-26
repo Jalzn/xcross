@@ -12,7 +12,12 @@ does it **separate** crosses (discrimination)? and is the player ranking **repro
   *quality of the situation created*.
 - **xCrossOT** — adds the ball's **destination** (where it arrived). Measures the *danger
   of the delivery*.
-- Tabular estimators compared: **XGBoost**, **AdaBoost**, **CatBoost**.
+- Tabular estimators compared: **XGBoost**, **AdaBoost**, **CatBoost**, **LightGBM**,
+  **HistGradientBoosting**, **RandomForest** (bagging) and **LogisticRegression** (the linear
+  floor). **TabPFN** (a pretrained tabular transformer) joins the registry only on a GPU host
+  (via `XCROSS_TABPFN=1`) — locally on macOS it stays out to avoid the OpenMP clash with
+  xgboost/lightgbm. TabPFN appears in the comparison as a benchmark but is **not eligible as the
+  headline model** (the headline is restricted to the in-process registry).
 - Calibration: **isotonic** or **sigmoid** (chosen by lowest ECE).
 - Validation: **5-fold out-of-fold**, `StratifiedGroupKFold` by match (the same match never
   appears in both train and test). Every metric is measured on the out-of-fold
@@ -38,6 +43,8 @@ does it **separate** crosses (discrimination)? and is the player ranking **repro
 | `std`, `p5..p95`, `range_5_95` | spread of the **raw** per-cross probabilities | higher = separates the deliveries more |
 | `player_discrimination` | standard deviation of the **per-player means** | higher = separates the players more |
 | `stability` | **split-half**: Spearman correlation between the rankings of two random halves of each player's crosses | higher = reproducible ranking |
+| `stability_temporal` | split-half but **chronological** (early vs late crosses): does early-season crossing predict late-season? The stricter test, and the **headline criterion for xCross** (xCrossOT is selected by AUC instead) | higher = the trait persists over time |
+| `topk_overlap_temporal` | fraction of the **top-15** players that persist between the early and late halves — does the *podium itself* reproduce, not just the overall order | higher = stable podium |
 | `icc` | **Intraclass Correlation**: fraction of variance that is *between* players (skill) vs *within* (per-cross noise). The canonical version of stability | 0 = pure noise, 1 = pure skill |
 
 > **Why a high `std` is not enough:** xCrossOT has a large `std` but low `stability`/`icc`
@@ -94,17 +101,32 @@ each league (player counts and `n` are per league), used by the per-league quadr
 
 Most figures are produced **for both labels** (`success`, `shot`) with a `_{label}` suffix, and a
 few per **(feature_set, label)** with a `_{xcross,xcrossot}_{label}` suffix. The exceptions cover
-both labels already and have no suffix: `table_model_metrics`, `table_comparison`, `chart_tradeoff`.
+both labels already and have no suffix: `table_model_metrics`, `table_comparison`.
 
 **Tables** (raw values rendered):
 - `table_model_metrics.png` — the 4 final models (feature set × label) with the selected estimator.
-- `table_comparison.png` — the matrix of the 24 runs (feature set × label × estimator × calibration).
+- `table_comparison.png` — the matrix of every run (feature set × label × estimator × calibration),
+  including the isolated TabPFN benchmark.
 - `table_league_metrics_{label}.png` — metrics per league (generalisation), for **both** xCross and
   xCrossOT.
 
 **Charts (per label):**
-- `chart_tradeoff.png` — AUC × stability of every run: none combines high discrimination **and** high
-  reproducibility (colour = feature set, marker = estimator, light = sigmoid).
+- `chart_model_tradeoff_{label}.png` — AUC × `stability_temporal` of every estimator, per
+  feature set; coloured by family (linear / bagging / boosting / foundation). Shows that no
+  model wins both axes — the headline is selected per objective.
+- `chart_model_robustness_{label}.png` — same metrics with **95% bootstrap CIs** (errorbars).
+- `chart_ranking_agreement_{label}.png` — heatmap of Spearman between the player rankings of
+  each pair of estimators.
+- `chart_calibration_compare_{label}.png` — reliability curves of every model overlaid (one
+  panel per feature set).
+- `chart_calibration_final_{label}.png` — reliability curve of each **selected final model**
+  (xCross | xCrossOT), with the predicted-probability histogram beneath each curve.
+- `chart_score_distribution_final_{label}.png` — OOF score distribution of each final model,
+  **split by the actual outcome** (label=0 vs label=1). Visualises the separation between
+  positives and negatives — discrimination as a shape, complementing the AUC number.
+- `chart_importance_compare_xcrossot_{label}.png` — top features of the xCrossOT headline vs.
+  TabPFN, normalised by each model's own max (shows convergence on the top + family-specific
+  divergence on the tail).
 - `chart_stability_vs_n_{label}.png` — stability vs. minimum crosses (and how many players remain).
 - `chart_ranking_top_{label}.png` — top 20 by xCross, with 95% CI.
 - `chart_ranking_quadrants_{label}.png` — **xCross × xCrossOT per player**, split into quadrants by
@@ -113,6 +135,9 @@ both labels already and have no suffix: `table_model_metrics`, `table_comparison
 - `chart_ranking_quadrants_by_league_{label}.png` — the same quadrant view **per league** (one panel
   each), with quadrants split by **that league's own medians**. Only leagues with at least 6 qualified
   players (≥20 crosses) are shown.
+- `chart_ranking_top_by_league_season_{label}.png` — top N crossers within each
+  **(league, season)** cohort by xCross, with 95% CIs. Cohorts with fewer than 6 qualified
+  players are skipped (e.g. Bundesliga 2025-2026, Champions League 2023-2024).
 - `chart_by_position_{label}.png` — distribution of xCross by position group (validates the ranking).
 - `chart_by_league_{label}.png` — metrics per league, one panel per feature set (xCross | xCrossOT).
 - `chart_reliability_{label}.png` — **raw rate vs xCross vs xCrossOT** on random/temporal stability and
@@ -123,8 +148,6 @@ both labels already and have no suffix: `table_model_metrics`, `table_comparison
 **Per (feature_set, label):**
 - `chart_importance_{xcross,xcrossot}_{label}.png` — feature importance of the **final model** (the
   one we actually use, chosen per target).
-- `calibration_{xcross,xcrossot}_{label}.png` — left = calibration curve (predicted × observed,
-  closer to the diagonal is better), right = histogram of predicted probabilities (the spread).
 - `lift_{xcross,xcrossot}_{label}.png` — actual label rate per predicted-probability decile (ordering).
 - `pdp_{xcross,xcrossot}_{label}.png` — **partial-dependence** grid of the **final model**: for the
   9 most important features, how the predicted probability moves as the feature varies (the

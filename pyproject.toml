@@ -24,7 +24,11 @@ dependencies = [
     "xgboost>=3.2.0",
     "matplotlib>=3.10.9",
     "catboost>=1.2.10",
+    "lightgbm>=4.6.0",
 ]
+
+[project.optional-dependencies]
+gpu = ["tabpfn>=8.0.3"]
 
 [project.urls]
 Repository = "https://github.com/Jalzn/xcross"

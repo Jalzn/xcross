@@ -35,13 +35,17 @@ After [installing with `uv`](#install):
 - **xCrossOT** — adds the **ball's destination** (where it arrived). Measures the *danger
   of the delivery*.
 
-Both are trained as the matrix `{xCross, xCrossOT} × {success, shot} × {XGBoost, AdaBoost,
-CatBoost} × {isotonic, sigmoid}`, evaluated on out-of-fold probabilities with
-`StratifiedGroupKFold` per match (the same match never appears in both train and test).
-The final report selects the best model per target from the comparison table
-([`comparison.csv`](artifacts/reports/metrics/comparison.csv), rendered as
-[`table_comparison.png`](artifacts/reports/figures/table_comparison.png)) — it is not
-hardcoded.
+Both are trained as the matrix `{xCross, xCrossOT} × {success, shot} × {8 estimators} ×
+{isotonic, sigmoid}` — the registry covers four families: linear (`logreg`), bagging
+(`random_forest`), gradient boosting (`xgboost`, `adaboost`, `catboost`, `lightgbm`, `histgb`)
+and a pretrained foundation model (`tabpfn`, run on a GPU host and brought in as a benchmark).
+Evaluation is on out-of-fold probabilities with `StratifiedGroupKFold` per match (the same match
+never appears in both train and test). The final report selects the headline per target by the
+metric that fits its job (xCross: temporal stability; xCrossOT: AUC), tie-broken by ECE; the
+choice is not hardcoded — it comes from the comparison table
+([`comparison.csv`](artifacts/reports/metrics/comparison.csv) /
+[`table_comparison.png`](artifacts/reports/figures/table_comparison.png)) restricted to the
+in-process registry (TabPFN appears as the benchmark ceiling, never as the production headline).
 
 ## How it works
 
@@ -83,9 +87,10 @@ and show *where* each acts:
 For **xCross**, **far-post attacking-shape entropy** (`entropy_attack_in_second_post`) is the single
 strongest feature, ahead of central-box attacking entropy (`entropy_attack_in_center_box`), with
 goalkeeper geometry (`gk_lateral_speed`, `gk_ball_distance`) contributing. For **xCrossOT** the
-arrival-zone entropy (`entropy_attack_in_zone`) leads, with the arrival location (`end_y`), the cross's
-**3D pace** (`flight_pace_3d`) and **whether the ball clears the keeper** (`clearance_over_keeper`) all in
-the top five — the ball's `z`, previously unused, is now front-line signal.
+arrival-zone entropy (`entropy_attack_in_zone`) leads, with **whether the ball clears the keeper**
+(`clearance_over_keeper`), the arrival location (`end_y`) and the **pitch control at the landing
+zone** (`pitch_control_in_zone`) all in the top five — the ball's `z`, previously unused, is now
+front-line signal.
 
 ## Results
 
@@ -97,25 +102,24 @@ Everything below is measured on **≈11,700 crosses from 1,183 matches** across 
 (Brasileirão 2023, Premier League 2023–24 and 2024–25, Champions League 2023–24, Bundesliga
 2025–26), on out-of-fold probabilities.
 
-**Final models** (AdaBoost for three targets, CatBoost for xCrossOT `success`; full metric
-definitions in [`docs/metrics.md`](docs/metrics.md)):
+**Final models** (AdaBoost for the xCross targets, XGBoost for xCrossOT `success`, HistGB for
+xCrossOT `shot`; selected per-objective from the comparison table — full metric definitions in
+[`docs/metrics.md`](docs/metrics.md)):
 
 | Model | Target | AUC | ECE | Stability | ICC |
 |---|---|---|---|---|---|
 | xCross | `success` | 0.58 | 0.013 | **0.73** | 0.13 |
 | xCross | `shot` | 0.58 | 0.007 | 0.72 | 0.14 |
-| xCrossOT | `success` | **0.84** | 0.007 | 0.35 | 0.02 |
-| xCrossOT | `shot` | 0.73 | 0.011 | 0.42 | 0.04 |
+| xCrossOT | `success` | **0.84** | 0.033 | 0.29 | 0.02 |
+| xCrossOT | `shot` | **0.77** | 0.016 | 0.26 | 0.03 |
 
 xCrossOT discriminates best (AUC up to 0.84) while xCross gives the more reproducible ranking
-(stability 0.73 vs 0.35) — the core trade-off charted below.
+(stability 0.73 vs 0.29) — the core trade-off charted below.
 
 **Are the probabilities calibrated?** Both models track the diagonal across the range and ECE
 stays under 0.01:
 
-| xCross | xCrossOT |
-|---|---|
-| ![Calibration, xCross success](docs/figures/calibration_xcross_success.png) | ![Calibration, xCrossOT success](docs/figures/calibration_xcrossot_success.png) |
+![Reliability curves — all estimators, xCross and xCrossOT](docs/figures/chart_calibration_compare_success.png)
 
 **And do they order crosses?** The complementary view — the actual success rate per
 predicted-probability decile. The black line (mean predicted) hugging the bars re-confirms the
@@ -152,7 +156,7 @@ successful shot (`success`); right, crosses that end in any shot (`shot`):
 
 **The core trade-off — no model is both highly discriminative and highly reproducible:**
 
-![Discrimination vs stability](docs/figures/chart_tradeoff.png)
+![Discrimination vs reproducibility — by model family, xCross & xCrossOT](docs/figures/chart_model_tradeoff_success.png)
 
 **Generalisation — does it hold across leagues and positions?** Metrics are stable
 league-to-league (Brasileirão, Premier League, Champions League), and the per-position xCross

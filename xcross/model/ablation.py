@@ -12,7 +12,6 @@ adapts to whichever phase has been built.
 
 from __future__ import annotations
 
-import glob
 import sys
 
 import numpy as np
@@ -20,7 +19,7 @@ import polars as pl
 from loguru import logger
 
 from xcross.config import ROOT
-from xcross.model.dataset import NEW_BLOCK_PREFIXES, NEW_OT_BLOCKS, load_features, make_xy
+from xcross.model.dataset import NEW_BLOCK_PREFIXES, NEW_OT_BLOCKS, load_features, make_xy, match_dates
 from xcross.model.estimators import ESTIMATORS
 from xcross.model.evaluate import metrics, temporal_split_stability
 from xcross.model.selection import load_comparison, select_best
@@ -33,13 +32,6 @@ FEATURE_SETS = ("xcross", "xcrossot")
 DELTA_METRICS = (
     "auc", "brier_skill", "ece", "stability_random", "stability_temporal", "icc", "player_discrimination",
 )
-
-
-def _match_dates() -> dict[str, str]:
-    """match_id -> ISO date for the chronological (temporal) stability split."""
-    files = glob.glob(str(ROOT / "data" / "processed" / "*" / "*" / "*" / "meta.parquet"))
-    meta = pl.concat([pl.read_parquet(f) for f in files]).unique("match_id")
-    return dict(zip(meta["match_id"].to_list(), meta["date"].to_list(), strict=True))
 
 
 def _present_blocks(df: pl.DataFrame) -> set[str]:
@@ -70,7 +62,7 @@ def run() -> int:
     METRICS_DIR.mkdir(parents=True, exist_ok=True)
     df = load_features()
     player_ids = df["crosser_player_id"].to_numpy()
-    dates = _match_dates()
+    dates = match_dates()
     order_key = np.array([dates.get(m, m) for m in df["match_id"].to_list()])
     comparison = load_comparison()
     present = _present_blocks(df)
@@ -81,7 +73,7 @@ def run() -> int:
         rows: list[dict] = []
         deltas: list[dict] = []
         for fs in FEATURE_SETS:
-            est, cal = select_best(comparison, fs, label_col).values()
+            est, cal = select_best(comparison, fs, label_col, eligible=set(ESTIMATORS)).values()
             applicable = sorted(present if fs == "xcrossot" else present - NEW_OT_BLOCKS)
 
             full_m, full_n = _oof_metrics(df, fs, label_col, est, cal, player_ids, order_key)

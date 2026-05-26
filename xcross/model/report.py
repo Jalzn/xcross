@@ -21,10 +21,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 import polars as pl
 from loguru import logger
-from sklearn.inspection import PartialDependenceDisplay
+from sklearn.inspection import PartialDependenceDisplay, permutation_importance
 
 from xcross.config import ROOT
-from xcross.model.dataset import load_features, make_xy
+from xcross.model.dataset import load_features, make_xy, match_dates
 from xcross.model.estimators import ESTIMATORS
 from xcross.model.evaluate import (
     combined_ranking,
@@ -45,7 +45,7 @@ FIGURES = ROOT / "artifacts" / "reports" / "figures"
 MIN_LEAGUE_CROSSES = 300
 MIN_LEAGUE_RANKED_PLAYERS = 6  # below this a per-league quadrant chart is too sparse to read
 LABELS = ("success", "shot")
-LABEL_COLUMN = {"success": "success", "shot": "shot_in_window"}  # short label -> feature column / comparison.csv label
+LABEL_COLUMN = {"success": "success", "shot": "shot_in_window"}  # short label -> feature column in the dataset
 FEATURE_SETS = ("xcross", "xcrossot")
 ABLATION_METRICS = ("auc", "auc_pr", "brier_skill", "ece", "stability", "icc", "player_discrimination")
 
@@ -59,17 +59,22 @@ def _roster() -> pl.DataFrame:
     )
 
 
-def _match_dates() -> dict[str, str]:
-    """match_id -> ISO date (sorts chronologically as a string) for the temporal stability split."""
-    files = glob.glob(str(ROOT / "data" / "processed" / "*" / "*" / "*" / "meta.parquet"))
-    meta = pl.concat([pl.read_parquet(f) for f in files]).unique("match_id")
-    return dict(zip(meta["match_id"].to_list(), meta["date"].to_list(), strict=True))
+def _feature_importance(model: object, X: np.ndarray, y: np.ndarray) -> np.ndarray:
+    """Native feature_importances_ for tree models; permutation importance on AUC otherwise
+    (model-agnostic — covers logreg and TabPFN, which expose no native importance)."""
+    if hasattr(model, "feature_importances_"):
+        return model.feature_importances_
+    result = permutation_importance(
+        model, X, y, scoring="roc_auc", n_repeats=5,
+        max_samples=min(2000, len(X)), random_state=0, n_jobs=-1,
+    )
+    return result.importances_mean
 
 
 def _model_importance(estimator: str, X: np.ndarray, y: np.ndarray, names: list[str], tag: str) -> None:
-    """Native feature importance of the *selected* final model — what we actually use."""
+    """Feature importance of the *selected* final model — what we actually use."""
     model = ESTIMATORS[estimator]().fit(X, y)
-    pl.DataFrame({"feature": names, "importance": model.feature_importances_}).sort(
+    pl.DataFrame({"feature": names, "importance": _feature_importance(model, X, y)}).sort(
         "importance", descending=True
     ).write_csv(METRICS / f"importance_{tag}.csv")
 
@@ -89,16 +94,20 @@ def _pdp_figure(estimator: str, X: np.ndarray, y: np.ndarray, names: list[str], 
     """Partial-dependence grid of the FINAL model: how the predicted probability moves as
     each top feature varies (direction and shape of the effect, complementing the magnitude
     in chart_importance). Each panel shades the curve above/below the model's average
-    prediction, and a rug shows where the real crosses lie."""
+    prediction, and a rug shows where the real crosses lie. Skipped for TabPFN: the per-grid
+    predict over its 6k context is prohibitively expensive on a single GPU."""
+    if estimator == "tabpfn":
+        logger.info(f"PDP skipped for {tag} (TabPFN): too expensive on a single GPU")
+        return
     model = ESTIMATORS[estimator]().fit(X, y)
-    top = np.argsort(model.feature_importances_)[::-1][:PDP_TOP]
+    top = np.argsort(_feature_importance(model, X, y))[::-1][:PDP_TOP]
     rng = np.random.default_rng(0)
     sample = X[rng.choice(len(X), min(PDP_SAMPLE, len(X)), replace=False)]
     baseline = float(model.predict_proba(sample)[:, 1].mean())
 
     display = PartialDependenceDisplay.from_estimator(
         model, sample, features=list(top), feature_names=names,
-        kind="average", grid_resolution=40, n_cols=3,
+        kind="average", method="brute", grid_resolution=40, n_cols=3,
         response_method="predict_proba", line_kw={"color": PDP_LINE, "linewidth": 2.2},
     )
     if display.deciles_vlines_ is not None:  # drop sklearn's default deciles; we draw our own rug
@@ -134,18 +143,62 @@ def _pdp_figure(estimator: str, X: np.ndarray, y: np.ndarray, names: list[str], 
     plt.close(fig)
 
 
+def _ablation_oof(df: pl.DataFrame, choice: dict, y: dict, groups: np.ndarray) -> tuple[dict, dict]:
+    """OOF of each selected model retrained on the no-entropy feature sets — keeps the estimator
+    fixed and changes only the representation, so the ablation CSV isolates the entropy block."""
+    logger.info("OOF for the no-entropy ablation ...")
+    X_noent = {fs: make_xy(df, f"{fs}_noent", "success") for fs in FEATURE_SETS}
+    oof_noent = {(fs, label): oof_predict(ESTIMATORS[choice[(fs, label)]["estimator"]],
+                                          X_noent[fs][0], y[label], groups, choice[(fs, label)]["calibration"])
+                 for fs in FEATURE_SETS for label in LABELS}
+    return X_noent, oof_noent
+
+
+def _write_reliability_csv(label: str, player_ids: np.ndarray, order_key: np.ndarray,
+                           prob_c: np.ndarray, prob_d: np.ndarray, yl: np.ndarray) -> None:
+    """Raw rate (noise baseline) vs the two models, on random and chronological stability + ICC."""
+    sources = {"raw_rate": yl.astype(float), "xcross": prob_c, "xcrossot": prob_d}
+    pl.DataFrame([
+        {"ranking": name,
+         "stability_random": split_half_stability(player_ids, v),
+         "stability_temporal": temporal_split_stability(player_ids, v, order_key),
+         "icc": icc(player_ids, v),
+         "player_discrimination": player_discrimination(player_ids, v)}
+        for name, v in sources.items()
+    ]).write_csv(METRICS / f"reliability_{label}.csv")
+
+
+def _write_ablation_csv(label: str, yl: np.ndarray, player_ids: np.ndarray,
+                       oof: dict, oof_noent: dict, X: dict, X_noent: dict) -> None:
+    """Each feature set with vs without the entropy block — the gap is the entropy contribution."""
+    rows = []
+    for fs in FEATURE_SETS:
+        for variant, prob, x_set in (("with_entropy", oof[(fs, label)], X),
+                                     ("no_entropy", oof_noent[(fs, label)], X_noent)):
+            m = metrics(yl, prob, player_ids)
+            rows.append({"feature_set": fs, "variant": variant,
+                         "n_features": x_set[fs][0].shape[1],
+                         **{k: m[k] for k in ABLATION_METRICS}})
+    pl.DataFrame(rows).write_csv(METRICS / f"ablation_{label}.csv")
+
+
 def run() -> int:
     METRICS.mkdir(parents=True, exist_ok=True)
     FIGURES.mkdir(parents=True, exist_ok=True)
     df = load_features()
     player_ids = df["crosser_player_id"].to_numpy()
     leagues = df["league"].to_numpy()
+    seasons = df["season"].to_numpy()
+    dates = match_dates()
+    order_key = np.array([dates.get(m, m) for m in df["match_id"].to_list()])
     X = {fs: make_xy(df, fs, "success") for fs in FEATURE_SETS}  # X identical across labels
     y = {label: df[LABEL_COLUMN[label]].cast(pl.Int8).to_numpy() for label in LABELS}
     groups = X["xcross"][2]
 
     comparison = load_comparison()
-    choice = {(fs, label): select_best(comparison, fs, LABEL_COLUMN[label]) for fs in FEATURE_SETS for label in LABELS}
+    eligible = set(ESTIMATORS)
+    choice = {(fs, label): select_best(comparison, fs, label, eligible=eligible)
+              for fs in FEATURE_SETS for label in LABELS}
 
     logger.info("OOF for the 4 targets with the selected models ...")
     oof = {(fs, label): oof_predict(ESTIMATORS[choice[(fs, label)]["estimator"]],
@@ -161,19 +214,12 @@ def run() -> int:
 
     pl.DataFrame([
         {"model": f"{fs}/{label}", "estimator": choice[(fs, label)]["estimator"],
-         "calibration": choice[(fs, label)]["calibration"], **metrics(y[label], oof[(fs, label)], player_ids)}
+         "calibration": choice[(fs, label)]["calibration"],
+         **metrics(y[label], oof[(fs, label)], player_ids, order_key)}
         for fs in FEATURE_SETS for label in LABELS
     ]).write_csv(METRICS / "model_metrics.csv")
 
-    # Ablation: same selected model, entropy block removed -> isolates the entropy contribution.
-    X_noent = {fs: make_xy(df, f"{fs}_noent", "success") for fs in FEATURE_SETS}
-    logger.info("OOF for the no-entropy ablation ...")
-    oof_noent = {(fs, label): oof_predict(ESTIMATORS[choice[(fs, label)]["estimator"]],
-                                          X_noent[fs][0], y[label], groups, choice[(fs, label)]["calibration"])
-                 for fs in FEATURE_SETS for label in LABELS}
-
-    dates = _match_dates()
-    order_key = np.array([dates.get(m, m) for m in df["match_id"].to_list()])
+    X_noent, oof_noent = _ablation_oof(df, choice, y, groups)
 
     roster = _roster()
     for label in LABELS:
@@ -191,27 +237,18 @@ def run() -> int:
         if per_league:
             pl.concat(per_league).write_csv(METRICS / f"ranking_by_league_{label}.csv")
 
-        # Ranking reliability: raw rate (noise baseline) vs the models, random and chronological.
-        sources = {"raw_rate": yl.astype(float), "xcross": prob_c, "xcrossot": prob_d}
-        pl.DataFrame([
-            {"ranking": name,
-             "stability_random": split_half_stability(player_ids, v),
-             "stability_temporal": temporal_split_stability(player_ids, v, order_key),
-             "icc": icc(player_ids, v),
-             "player_discrimination": player_discrimination(player_ids, v)}
-            for name, v in sources.items()
-        ]).write_csv(METRICS / f"reliability_{label}.csv")
+        per_league_season = []
+        for lg, sn in sorted({(leagues[i], seasons[i]) for i in range(len(leagues))}):
+            mask = (leagues == lg) & (seasons == sn)
+            ranked = combined_ranking(player_ids[mask], prob_c[mask], prob_d[mask], yl[mask])
+            if ranked.height >= MIN_LEAGUE_RANKED_PLAYERS:
+                per_league_season.append(ranked.join(roster, on="player_id", how="left")
+                                         .with_columns(pl.lit(lg).alias("league"), pl.lit(sn).alias("season")))
+        if per_league_season:
+            pl.concat(per_league_season).write_csv(METRICS / f"ranking_by_league_season_{label}.csv")
 
-        # Entropy ablation: each feature set with vs without the entropy block.
-        ablation = []
-        for fs in FEATURE_SETS:
-            for variant, prob, x_set in (("with_entropy", oof[(fs, label)], X),
-                                         ("no_entropy", oof_noent[(fs, label)], X_noent)):
-                m = metrics(yl, prob, player_ids)
-                ablation.append({"feature_set": fs, "variant": variant,
-                                 "n_features": x_set[fs][0].shape[1],
-                                 **{k: m[k] for k in ABLATION_METRICS}})
-        pl.DataFrame(ablation).write_csv(METRICS / f"ablation_{label}.csv")
+        _write_reliability_csv(label, player_ids, order_key, prob_c, prob_d, yl)
+        _write_ablation_csv(label, yl, player_ids, oof, oof_noent, X, X_noent)
 
         league_rows = [
             {"league": lg, "feature_set": fs, "n": int((leagues == lg).sum()),
