@@ -145,18 +145,30 @@ o TabPFN. *A correção dessa propagação é pendência se quisermos o TabPFN c
 
 ## 6. Pendências
 
-### Para o TabPFN como headline (BLOQUEADO)
-- **Bloqueio (2026-05-26):** créditos Lightning AI esgotados pelos runs anteriores —
-  `insufficient balance to start the cloud space`. O launch da permutation importance
-  do TabPFN falhou imediatamente.
-- Próximo passo (quando destravar): rodar `scripts/tabpfn_importance.py` na cloud
-  (`scripts/run_tabpfn_importance_lightning.py launch` + `collect`). Saídas:
-  `importance_xcrossot_{success,shot}_tabpfn.csv`.
-- Alternativas para destravar: aguardar reset mensal do free tier; top up; migrar para
-  Colab/Kaggle (T4/P100 grátis); aceitar TabPFN só como benchmark na §10.
-- Investigar a propagação de `XCROSS_TABPFN` no `nohup bash -lc` (hipóteses: bash não-
-  interativo herda `export`s antes do `nohup`; `lc` força login shell que pode resetar).
-  *Não bloqueia a §10 do paper*.
+### Permutation importance do TabPFN (DONE — 2026-05-26)
+- Arquivos: `importance_xcrossot_success_tabpfn.csv`, `importance_xcrossot_shot_tabpfn.csv`.
+- Rodou em **modo síncrono** (`scripts/run_tabpfn_importance_lightning.py`) — conexão
+  SDK ativa mantém o studio acordado (sem auto_sleep), `stop()` explícito no `finally`.
+- Parâmetros reduzidos p/ caber em ~1h: `max_samples=500`, `n_repeats=3`,
+  `n_estimators=1` no TabPFN. Os números são ruidosos, mas o **ranking das top features
+  é estável** — usar como descritivo.
+- Custo total: ~$0.50 de crédito (1h05 na L4).
+
+### Achado p/ o paper — TabPFN vs catboost (mesmas xcrossot/success)
+- **Convergência**: ambos rankeiam `entropy_attack_in_zone` em #1; `flight_pace_3d`,
+  `end_y`, `pitch_control_in_zone`, `temporal_entropy_diff_zone_delta`,
+  `clearance_over_keeper` aparecem no top 10 dos dois.
+- **Divergência**: TabPFN valoriza mais as **três visões de entropia** (attack, defense,
+  general — informação espacial multi-camada); catboost valoriza mais a **geometria**
+  (`end_y`, `distance_from_end_line`) e o **voo da bola** geométrico (`swing_inout`,
+  `flight_loftiness`).
+- Leitura: famílias diferentes capturam ângulos diferentes do mesmo sinal, mas o
+  **conjunto de top features é robusto** — reforça que a representação certa é o sinal,
+  não o classificador.
+
+### Pendência menor: figura comparativa
+- Opcional: gerar `chart_importance_compare_xcrossot_success.png` mostrando TabPFN vs
+  catboost lado a lado, para ilustrar o achado de convergência+divergência acima.
 
 ### Para o paper
 - Rascunhar `docs/paper-outline.md` com a estrutura completa (já discutida).
